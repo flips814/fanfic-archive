@@ -154,13 +154,33 @@ button.link {
   padding: 1rem; margin-bottom: 1.5rem; border-radius: var(--radius-lg);
   background: var(--pico-card-background-color); box-shadow: var(--card-shadow);
 }
-.filters .field { flex: 1 1 10rem; display: flex; flex-direction: column; }
-.filters .field.grow { flex: 2 1 14rem; }
+.filters .field { flex: 1 1 7rem; display: flex; flex-direction: column; }
+.filters .field.grow { flex: 2 1 12rem; }
 .filters .field.check, .filters .field.buttons { flex: 0 0 auto; flex-direction: row; align-items: center; gap: .75rem; }
 .filters label { font-size: .85rem; font-weight: 700; margin-bottom: .25rem; }
-.filters .check label { font-weight: 400; font-size: 1rem; margin: 0 0 .7rem; }
+.filters .check label { font-weight: 400; font-size: 1rem; }
 .filters input, .filters select, .filters button { margin-bottom: 0; }
 .filters button[type="submit"] { width: auto; }
+/* One shape for every filter control: same corners, same height as the buttons. */
+.filters {
+  --control-radius: .6rem;
+  --control-height: clamp(44px, 2.5rem, 52px);
+  align-items: flex-start;
+}
+.filters input:not([type="checkbox"], [type="radio"]), .filters select, .filters button, .filters [role="button"] {
+  height: var(--control-height); padding-block: 0; border-radius: var(--control-radius);
+  font-size: 1rem; line-height: 1.2;
+}
+.filters .field.buttons, .filters .field.check { align-self: flex-end; }
+.filters .field, .filters select, .filters input { min-width: 0; }
+.filter-fields { align-items: flex-end; }
+.filters .field.check label { white-space: nowrap; }
+.filters select { padding-inline: .9rem 2.5rem; background-position: center right .85rem; }
+.filters input[type="search"] { padding-inline: 2.6rem .9rem; background-position: center left .9rem; background-size: 1.1rem; }
+.filters button, .filters [role="button"] { display: inline-flex; align-items: center; justify-content: center; padding-inline: 1.4rem; }
+.filters input[type="checkbox"] { border-radius: .3em; margin-top: 0; }
+.filters .field.check label { display: flex; align-items: center; gap: .5rem; min-height: var(--control-height); margin: 0; }
+.filters .field.buttons a { margin: 0; text-decoration: none; }
 .more-filters { flex: 100 1 30rem; margin: 0; }
 .more-filters > summary { display: none; }
 .filter-fields { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; }

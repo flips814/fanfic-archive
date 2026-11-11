@@ -11,7 +11,8 @@
 </div>
 
 {% set active_filters = [filters.site, filters.added_by, filters.status, filters.mine]|select|list|length %}
-<form method="get" class="filters" role="search" aria-label="Search and filter the library">
+<search aria-label="Search and filter the library">
+<form method="get" class="filters">
   <div class="field grow">
     <label for="f-q">Search</label>
     <input id="f-q" type="search" name="q" value="{{ filters.q }}" placeholder="Title or author" enterkeyhint="search">
@@ -48,9 +49,10 @@
   </details>
   <div class="field buttons">
     <button type="submit">Apply</button>
-    {% if filters.q or filters.site or filters.added_by or filters.status or filters.mine %}<a href="/" class="secondary">Clear</a>{% endif %}
+    {% if filters.q or filters.site or filters.added_by or filters.status or filters.mine %}<a href="/" role="button" class="secondary outline">Clear</a>{% endif %}
   </div>
 </form>
+</search>
 
 {% if not rows %}
   <article class="empty-state">
