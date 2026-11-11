@@ -46,17 +46,17 @@
   {% if queued %}
   <h3 class="sub-title">Waiting or running</h3>
   <div class="table-wrap" role="region" aria-label="Waiting jobs" tabindex="0">
-    <table class="striped">
+    <table class="striped table-stack" role="table">
       <caption class="visually-hidden">Jobs waiting or running</caption>
-      <thead><tr><th scope="col">Queued</th><th scope="col">Who</th><th scope="col">What</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
-      <tbody>
+      <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Queued</th><th scope="col" role="columnheader">Who</th><th scope="col" role="columnheader">What</th><th scope="col" role="columnheader">Status</th><th scope="col" role="columnheader"><span class="visually-hidden">Actions</span></th></tr></thead>
+      <tbody role="rowgroup">
         {% for job in queued %}
-        <tr>
-          <td class="nowrap">{{ when(job.created_at) }}</td>
-          <td class="nowrap">{{ who(job.requested_by) }}</td>
-          <td>{{ job.work_title or job.url }}</td>
-          <td class="nowrap">{{ job_status(job.status) }}</td>
-          <td>{% if job.status == "queued" %}
+        <tr role="row">
+          <td role="cell" data-label="Queued" class="nowrap">{{ when(job.created_at) }}</td>
+          <td role="cell" data-label="Who" class="nowrap">{{ who(job.requested_by) }}</td>
+          <td role="cell" data-label="What" class="stack-title">{{ job.work_title or job.url }}</td>
+          <td role="cell" data-label="Status" class="nowrap">{{ job_status(job.status) }}</td>
+          <td role="cell" class="stack-actions{{ ' stack-empty' if job.status != 'queued' }}">{% if job.status == "queued" %}
             <form method="post" action="/admin/jobs/{{ job.id }}/cancel" class="inline"><button class="link">Cancel<span class="visually-hidden"> {{ job.work_title or job.url }}</span></button></form>
           {% endif %}</td>
         </tr>
@@ -69,17 +69,17 @@
   <h3 class="sub-title">Failed in the last week</h3>
   {% if failed %}
   <div class="table-wrap" role="region" aria-label="Failed jobs" tabindex="0">
-    <table class="striped">
+    <table class="striped table-stack" role="table">
       <caption class="visually-hidden">Failed jobs in the last week</caption>
-      <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">What</th><th scope="col">Why</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
-      <tbody>
+      <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">When</th><th scope="col" role="columnheader">Who</th><th scope="col" role="columnheader">What</th><th scope="col" role="columnheader">Why</th><th scope="col" role="columnheader"><span class="visually-hidden">Actions</span></th></tr></thead>
+      <tbody role="rowgroup">
         {% for job in failed %}
-        <tr>
-          <td class="nowrap">{{ when(job.created_at) }}</td>
-          <td class="nowrap">{{ who(job.requested_by) }}</td>
-          <td>{% if job.work_id %}<a href="/works/{{ job.work_id }}">{{ job.work_title }}</a>{% else %}<span class="break">{{ job.url }}</span>{% endif %}</td>
-          <td class="details">{{ job.message }}</td>
-          <td><form method="post" action="/admin/jobs/{{ job.id }}/retry" class="inline"><button class="link">Retry<span class="visually-hidden"> {{ job.work_title or job.url }}</span></button></form></td>
+        <tr role="row">
+          <td role="cell" data-label="When" class="nowrap">{{ when(job.created_at) }}</td>
+          <td role="cell" data-label="Who" class="nowrap">{{ who(job.requested_by) }}</td>
+          <td role="cell" data-label="What" class="stack-title">{% if job.work_id %}<a href="/works/{{ job.work_id }}">{{ job.work_title }}</a>{% else %}<span class="break">{{ job.url }}</span>{% endif %}</td>
+          <td role="cell" data-label="Why" class="details">{{ job.message }}</td>
+          <td role="cell" class="stack-actions"><form method="post" action="/admin/jobs/{{ job.id }}/retry" class="inline"><button class="link">Retry<span class="visually-hidden"> {{ job.work_title or job.url }}</span></button></form></td>
         </tr>
         {% endfor %}
       </tbody>

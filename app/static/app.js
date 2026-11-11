@@ -54,6 +54,27 @@
     });
   });
 
+  // ---- small screens: fold the library filters unless one is in use -----------
+  var narrow = window.matchMedia("(max-width: 640px)");
+  document.querySelectorAll("details[data-collapse-on-mobile]").forEach(function (d) {
+    var sync = function () {
+      if (!narrow.matches) d.open = true;
+      else if (d.getAttribute("data-collapse-on-mobile") === "true") d.open = false;
+    };
+    sync();
+    narrow.addEventListener("change", sync);
+  });
+  // "Done" buttons inside a <details> panel close it and return focus to its toggle.
+  document.querySelectorAll("[data-close-details]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var d = btn.closest("details");
+      if (!d) return;
+      d.removeAttribute("open");
+      var s = d.querySelector("summary");
+      if (s) s.focus();
+    });
+  });
+
   // ---- comment character counters (announced only near the limit) --------------
   document.querySelectorAll("textarea[data-counter]").forEach(function (ta) {
     var out = document.getElementById(ta.getAttribute("data-counter"));

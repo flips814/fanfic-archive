@@ -3,34 +3,34 @@
 <p class="muted">Nothing here yet.</p>
 {% else %}
 <div class="table-wrap" role="region" aria-label="{{ caption }}" tabindex="0">
-<table class="striped">
+<table class="striped table-stack" role="table">
   <caption class="visually-hidden">{{ caption }}</caption>
-  <thead>
-    <tr>
-      <th scope="col">When</th>
-      <th scope="col">Who</th>
-      <th scope="col">Action</th>
-      {% if show_work %}<th scope="col">Work</th>{% endif %}
-      <th scope="col">Result</th>
-      <th scope="col">New chapters</th>
-      <th scope="col">Details</th>
+  <thead role="rowgroup">
+    <tr role="row">
+      <th scope="col" role="columnheader">When</th>
+      <th scope="col" role="columnheader">Who</th>
+      <th scope="col" role="columnheader">Action</th>
+      {% if show_work %}<th scope="col" role="columnheader">Work</th>{% endif %}
+      <th scope="col" role="columnheader">Result</th>
+      <th scope="col" role="columnheader">New chapters</th>
+      <th scope="col" role="columnheader">Details</th>
     </tr>
   </thead>
-  <tbody>
+  <tbody role="rowgroup">
   {% for job in jobs %}
-    <tr>
-      <td class="nowrap">{{ when(job.created_at) }}</td>
-      <td class="nowrap">{{ who(job.requested_by) }}</td>
-      <td class="nowrap">{{ "Import" if job.kind == "import" else "Update check" }}</td>
+    <tr role="row">
+      <td role="cell" data-label="When" class="nowrap">{{ when(job.created_at) }}</td>
+      <td role="cell" data-label="Who" class="nowrap">{{ who(job.requested_by) }}</td>
+      <td role="cell" data-label="Action" class="nowrap">{{ "Import" if job.kind == "import" else "Update check" }}</td>
       {% if show_work %}
-      <td>
+      <td role="cell" data-label="Work" class="stack-title">
         {% if job.work_id %}<a href="/works/{{ job.work_id }}">{{ job.work_title or job.url }}</a>
         {% else %}<a href="{{ job.url }}" target="_blank" rel="noopener" class="break">{{ job.url }}<span class="visually-hidden"> (opens in a new tab)</span></a>{% endif %}
       </td>
       {% endif %}
-      <td class="nowrap">{{ job_status(job.status) }}</td>
-      <td>{{ job.chapters_added }}</td>
-      <td class="details">{{ job.message or "" }}</td>
+      <td role="cell" data-label="Result" class="nowrap">{{ job_status(job.status) }}</td>
+      <td role="cell" data-label="New chapters">{{ job.chapters_added }}</td>
+      <td role="cell" data-label="Details" class="details{{ ' stack-empty' if not job.message }}">{{ job.message or "" }}</td>
     </tr>
   {% endfor %}
   </tbody>

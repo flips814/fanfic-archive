@@ -11,26 +11,26 @@
 {% include "admin/_nav.html" %}
 
 <div class="table-wrap" role="region" aria-label="Users" tabindex="0">
-<table class="striped">
+<table class="striped table-stack" role="table">
   <caption class="visually-hidden">All users</caption>
-  <thead>
-    <tr><th scope="col">User</th><th scope="col">Signs in with</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Last sign-in</th><th scope="col">Actions</th></tr>
+  <thead role="rowgroup">
+    <tr role="row"><th scope="col" role="columnheader">User</th><th scope="col" role="columnheader">Signs in with</th><th scope="col" role="columnheader">Role</th><th scope="col" role="columnheader">Status</th><th scope="col" role="columnheader">Last sign-in</th><th scope="col" role="columnheader">Actions</th></tr>
   </thead>
-  <tbody>
+  <tbody role="rowgroup">
   {% for u in users %}
-    <tr {% if u.disabled %}class="row-disabled"{% endif %}>
-      <th scope="row" class="user-cell">
+    <tr role="row" {% if u.disabled %}class="row-disabled"{% endif %}>
+      <th scope="row" role="rowheader" class="user-cell stack-title">
         <span class="avatar" aria-hidden="true">{{ u.label[:1]|upper }}</span>
         <span>{{ u.label }}{% if u.id == user.id %} <span class="muted">(you)</span>{% endif %}<br><small class="muted">{{ u.email or u.username or "" }}</small></span>
       </th>
-      <td>{{ "Password" if u.is_local else ("Dev login" if u.oidc_issuer == "dev-login" else "SSO") }}</td>
-      <td>
+      <td role="cell" data-label="Signs in with">{{ "Password" if u.is_local else ("Dev login" if u.oidc_issuer == "dev-login" else "SSO") }}</td>
+      <td role="cell" data-label="Role">
         {{ "Admin" if u.is_admin else "Member" }}
         {% if not u.is_local and u.admin_override is not none %}<br><small class="muted">set by an admin</small>{% endif %}
       </td>
-      <td>{{ "Disabled" if u.disabled else "Active" }}</td>
-      <td class="nowrap">{{ when(u.last_login_at) }}</td>
-      <td class="user-actions">
+      <td role="cell" data-label="Status">{{ "Disabled" if u.disabled else "Active" }}</td>
+      <td role="cell" data-label="Last sign-in" class="nowrap">{{ when(u.last_login_at) }}</td>
+      <td role="cell" class="user-actions stack-actions">
         <form method="post" action="/admin/users/{{ u.id }}/role" class="inline">
           <button class="link">{{ "Remove admin" if u.is_admin else "Make admin" }}<span class="visually-hidden"> for {{ u.label }}</span></button>
         </form>

@@ -158,7 +158,7 @@ def test_accessibility_landmarks(fake_site, sent):
         assert 'aria-current="page"' in page, path
         assert page.count("<h1") == 1, f"{path} should have exactly one h1"
     assert 'role="status" aria-live="polite"' in alice.get("/").text
-    assert '<th scope="col">' in alice.get("/activity").text
+    assert '<th scope="col" role="columnheader">' in alice.get("/activity").text
     assert 'data-nav="next"' in alice.get("/works/1/chapters/1").text
 
 

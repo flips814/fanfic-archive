@@ -10,11 +10,15 @@
   <a href="/add" role="button">{{ icon("plus") }} Add works</a>
 </div>
 
-<form method="get" class="filters" role="search" aria-label="Filter the library">
+{% set active_filters = [filters.site, filters.added_by, filters.status, filters.mine]|select|list|length %}
+<form method="get" class="filters" role="search" aria-label="Search and filter the library">
   <div class="field grow">
     <label for="f-q">Search</label>
-    <input id="f-q" type="search" name="q" value="{{ filters.q }}" placeholder="Title or author">
+    <input id="f-q" type="search" name="q" value="{{ filters.q }}" placeholder="Title or author" enterkeyhint="search">
   </div>
+  <details class="more-filters" open data-collapse-on-mobile="{{ 'false' if active_filters else 'true' }}">
+  <summary>Filters{% if active_filters %} <span class="pill pill-small">{{ active_filters }} on</span>{% endif %}</summary>
+  <div class="filter-fields">
   <div class="field">
     <label for="f-site">Site</label>
     <select id="f-site" name="site">
@@ -40,6 +44,8 @@
   <div class="field check">
     <label><input type="checkbox" name="mine" value="1" {% if filters.mine %}checked{% endif %}> Only works I follow</label>
   </div>
+  </div>
+  </details>
   <div class="field buttons">
     <button type="submit">Apply</button>
     {% if filters.q or filters.site or filters.added_by or filters.status or filters.mine %}<a href="/" class="secondary">Clear</a>{% endif %}

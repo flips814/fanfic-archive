@@ -42,15 +42,18 @@
       </label>
       <label class="setting">Page colour
         <select data-reader-pref="paper">
-          <option value="default">Match site theme</option>
+          <option value="default">Site theme</option>
           <option value="light">Light</option>
           <option value="sepia">Sepia</option>
           <option value="dark">Dark</option>
           <option value="contrast">High contrast</option>
         </select>
       </label>
-      <button type="button" class="secondary outline reset" data-reader-reset>Reset to defaults</button>
-      <p class="muted small">Saved in this browser. Tip: use the ← and → arrow keys to change chapters.</p>
+      <div class="reader-panel-buttons">
+        <button type="button" class="secondary outline reset" data-reader-reset aria-label="Reset reading settings to defaults">Reset</button>
+        <button type="button" data-close-details>Done</button>
+      </div>
+      <p class="muted small">Saved in this browser. On a keyboard, ← and → change chapters.</p>
     </div>
   </details>
 </div>
