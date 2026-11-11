@@ -14,9 +14,13 @@ A self-hosted, multi-user fanfiction library that runs in Docker.
 No configuration is needed to start:
 
 ```bash
+git clone https://github.com/flips814/fanfic-archive.git && cd fanfic-archive
 docker compose up -d --build
+docker compose ps                                        # db, web, worker, flaresolverr: all "healthy"
 docker compose logs web | grep -A2 "First-time setup"   # copy the setup code
 ```
+
+The stack is four containers under the `fanfic-archive` project: **db** (PostgreSQL, data in the `pgdata` volume), **web** (the site), **worker** (imports and update checks) and **flaresolverr** (gets past Cloudflare for FanFiction.net). Each has a health check, restarts automatically, and keeps at most 30 MB of logs.
 
 Open `http://localhost:8000/setup`, enter the setup code, name your archive, and create the admin account. You'll land in the **Admin** panel, which has a setup checklist and every setting:
 
@@ -64,7 +68,7 @@ To try the app without an IdP, set `DEV_LOGIN=true` and visit `/dev-login?as=ali
 | Site | Notes |
 | --- | --- |
 | AO3 | For works restricted to logged-in users, each user adds their own AO3 login under *Settings → Site logins* (stored encrypted with `SECRET_KEY`). An import or "Check now" uses the clicking user's login; scheduled update checks use the login of whoever imported the work, then any follower's. A login under *Admin → Importers → Extra FanFicFare settings* (or in `config/personal.ini`) is only a server-wide fallback. AO3 rate-limits aggressively and may block cloud/VPN IPs (HTTP 418/429). |
-| FanFiction.net | Behind Cloudflare, so requests go through the bundled [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) container. It's on by default via `COMPOSE_PROFILES=flaresolverr` and `FLARESOLVERR_URL` in `.env`; `FLARESOLVERR_SITES` lists which sites use it (FanFiction.net and FictionPress by default). Each page takes several seconds through FlareSolverr, and Cloudflare can still block some IPs. |
+| FanFiction.net | Behind Cloudflare, so requests go through the bundled [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) container. It starts with the rest of the stack and is used automatically (set `FLARESOLVERR_URL=` empty in `.env`, or clear it under *Admin → Importers*, to stop using it); `FLARESOLVERR_SITES` lists which sites use it (FanFiction.net and FictionPress by default). Each page takes several seconds through FlareSolverr, and Cloudflare can still block some IPs. |
 | Wattpad | Works out of the box. |
 | Tumblr | No account or API key needed (uses Tumblr's legacy v1 read API, which Tumblr could retire without notice; blogs visible only to logged-in users can't be read). Paste a single post URL (one-chapter work) or a blog tag page like `https://BLOG.tumblr.com/tagged/my-fic` (every post under that tag becomes a chapter, oldest first, and new posts become new chapters). |
 | Others | Anything [FanFicFare supports](https://github.com/JimmXinu/FanFicFare/wiki/SupportedSites). |

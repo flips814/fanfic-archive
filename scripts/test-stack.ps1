@@ -10,7 +10,7 @@ param(
 )
 
 Set-Location (Split-Path $PSScriptRoot -Parent)
-$compose = @("docker", "compose", "-f", "docker-compose.yml", "-f", "docker-compose.test.yml", "--profile", "flaresolverr")
+$compose = @("docker", "compose", "-f", "docker-compose.yml", "-f", "docker-compose.test.yml")
 $keepAliveTask = "FanficArchive-WSL-KeepAlive"
 
 # WSL stops the distro (and Docker with it) once no wsl.exe process is attached.

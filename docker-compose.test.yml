@@ -6,7 +6,7 @@
 #   Fake SSO       http://localhost:8080   (log in as anyone; paste claims JSON for name/email/admin)
 #   Mailpit        http://localhost:8025   (every email the app sends)
 #   ntfy           http://localhost:8090/fanfic-all   (server-wide push notifications)
-#   FlareSolverr   started via --profile flaresolverr (scripts/test-stack.ps1 does this)
+#   FlareSolverr   part of the main stack (see docker-compose.yml)
 #
 # Automated tests:
 #   wsl docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
