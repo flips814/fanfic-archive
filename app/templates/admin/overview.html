@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, when, who, job_status %}
+{% block title %}Admin · {{ settings.site_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <hgroup>
+    <h1>Admin</h1>
+    <p>Everything you can change about this archive, in one place.</p>
+  </hgroup>
+</div>
+{% include "admin/_nav.html" %}
+
+<section aria-labelledby="check-h" class="settings-card">
+  <h2 id="check-h" class="section-title">Setup checklist</h2>
+  <ul class="checklist" role="list">
+    {% for item in checklist %}
+      <li class="{{ 'ok' if item.ok else ('warn' if item.warn else 'bad') }}">
+        <span class="check-icon" aria-hidden="true">{{ icon("check") if item.ok else icon("alert") }}</span>
+        <span class="visually-hidden">{{ "Done:" if item.ok else ("Optional:" if item.warn else "Needs attention:") }}</span>
+        <div>
+          <strong>{% if item.href %}<a href="{{ item.href }}">{{ item.title }}</a>{% else %}{{ item.title }}{% endif %}</strong>
+          <span class="muted">{{ item.detail }}</span>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="stat-grid" aria-label="Archive totals">
+  <div><span class="stat-label">Works</span><span class="stat-value">{{ stats.works|num }}</span></div>
+  <div><span class="stat-label">Chapters</span><span class="stat-value">{{ stats.chapters|num }}</span></div>
+  <div><span class="stat-label">Users</span><span class="stat-value">{{ stats.users }}</span></div>
+  <div><span class="stat-label">Comments</span><span class="stat-value">{{ stats.comments }}</span></div>
+  <div><span class="stat-label">Jobs waiting</span><span class="stat-value">{{ stats.queued }}</span><span class="stat-sub">{{ stats.running }} running</span></div>
+  <div><span class="stat-label">Failed this week</span><span class="stat-value">{{ stats.failed_week }}</span></div>
+</section>
+
+<section aria-labelledby="jobs-h">
+  <div class="page-head">
+    <h2 id="jobs-h" class="section-title">Imports &amp; update checks</h2>
+    <form method="post" action="/admin/jobs/check-all" data-confirm="Queue an update check for every work now?">
+      <button class="secondary outline">{{ icon("refresh") }} Check every work now</button>
+    </form>
+  </div>
+
+  {% if queued %}
+  <h3 class="sub-title">Waiting or running</h3>
+  <div class="table-wrap" role="region" aria-label="Waiting jobs" tabindex="0">
+    <table class="striped">
+      <caption class="visually-hidden">Jobs waiting or running</caption>
+      <thead><tr><th scope="col">Queued</th><th scope="col">Who</th><th scope="col">What</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+      <tbody>
+        {% for job in queued %}
+        <tr>
+          <td class="nowrap">{{ when(job.created_at) }}</td>
+          <td class="nowrap">{{ who(job.requested_by) }}</td>
+          <td>{{ job.work_title or job.url }}</td>
+          <td class="nowrap">{{ job_status(job.status) }}</td>
+          <td>{% if job.status == "queued" %}
+            <form method="post" action="/admin/jobs/{{ job.id }}/cancel" class="inline"><button class="link">Cancel<span class="visually-hidden"> {{ job.work_title or job.url }}</span></button></form>
+          {% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <h3 class="sub-title">Failed in the last week</h3>
+  {% if failed %}
+  <div class="table-wrap" role="region" aria-label="Failed jobs" tabindex="0">
+    <table class="striped">
+      <caption class="visually-hidden">Failed jobs in the last week</caption>
+      <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">What</th><th scope="col">Why</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+      <tbody>
+        {% for job in failed %}
+        <tr>
+          <td class="nowrap">{{ when(job.created_at) }}</td>
+          <td class="nowrap">{{ who(job.requested_by) }}</td>
+          <td>{% if job.work_id %}<a href="/works/{{ job.work_id }}">{{ job.work_title }}</a>{% else %}<span class="break">{{ job.url }}</span>{% endif %}</td>
+          <td class="details">{{ job.message }}</td>
+          <td><form method="post" action="/admin/jobs/{{ job.id }}/retry" class="inline"><button class="link">Retry<span class="visually-hidden"> {{ job.work_title or job.url }}</span></button></form></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="muted">Nothing failed this week.</p>
+  {% endif %}
+
+  {% if errored_works %}
+  <h3 class="sub-title">Works whose last check failed</h3>
+  <ul class="plain-list">
+    {% for w in errored_works %}<li><a href="/works/{{ w.id }}">{{ w.title }}</a>: <span class="muted">{{ w.last_error }}</span></li>{% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Admin · {{ settings.site_name }}{% endblock %}
+
+{% macro render_field(f) %}
+  {% set value = settings[f.key] %}
+  {% set fid = "f-" ~ f.key %}
+  {% set help_id = fid ~ "-help" %}
+  <div class="field-block">
+    {% if f.kind == "bool" %}
+      <label><input type="checkbox" role="switch" name="{{ f.key }}" value="1" {% if value %}checked{% endif %} {% if f.help %}aria-describedby="{{ help_id }}"{% endif %}> {{ f.label }}</label>
+    {% else %}
+      <div class="field-label">
+        <label for="{{ fid }}">{{ f.label }}</label>
+        {% if f.key in overridden %}<span class="pill pill-small" title="Saved in the admin panel">set here</span>
+        {% elif f.key in env_keys %}<span class="pill pill-small" title="Set in .env / the container environment">from .env</span>{% endif %}
+      </div>
+      {% if f.kind == "secret" %}
+        <input id="{{ fid }}" name="{{ f.key }}" type="password" autocomplete="new-password"
+               placeholder="{{ 'Saved; leave blank to keep it' if value else (f.placeholder or '') }}"
+               aria-describedby="{{ help_id }}">
+      {% elif f.kind in ("list", "text") %}
+        <textarea id="{{ fid }}" name="{{ f.key }}" rows="{{ 6 if f.kind == 'text' else 3 }}" spellcheck="false"
+                  placeholder="{{ f.placeholder }}" {% if f.help %}aria-describedby="{{ help_id }}"{% endif %}
+                  {% if f.kind == 'text' %}class="mono"{% endif %}>{{ value|join("\n") if f.kind == "list" else value }}</textarea>
+      {% else %}
+        <input id="{{ fid }}" name="{{ f.key }}" value="{{ value }}"
+               type="{{ 'number' if f.kind == 'int' else ('url' if f.kind == 'url' else 'text') }}"
+               {% if f.kind == 'int' %}min="0" inputmode="numeric"{% endif %}
+               placeholder="{{ f.placeholder }}" spellcheck="false" {% if f.help %}aria-describedby="{{ help_id }}"{% endif %}>
+      {% endif %}
+    {% endif %}
+    {% if f.help or (f.kind == "secret" and value) %}
+      <small id="{{ help_id }}">{{ f.help }}
+        {% if f.kind == "secret" and value %}<label class="inline-check"><input type="checkbox" name="{{ f.key }}__clear" value="1"> Remove the saved value</label>{% endif %}
+      </small>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <hgroup>
+    <h1>{{ title }}</h1>
+    <p>{{ description }}</p>
+  </hgroup>
+</div>
+{% include "admin/_nav.html" %}
+
+{% if section == "signin" %}
+  <article class="notice">
+    <strong>Settings for your provider</strong>
+    <dl class="copy-list">
+      <dt>Redirect / callback URL</dt><dd><code>{{ settings.base_url }}/auth/callback</code></dd>
+      <dt>Post-logout redirect URL</dt><dd><code>{{ settings.base_url }}/</code></dd>
+      <dt>Client type</dt><dd>Confidential, authorization code flow (PKCE is used automatically)</dd>
+    </dl>
+  </article>
+{% endif %}
+
+<form method="post" action="/admin/settings/{{ section }}" class="settings-card">
+  {% for f in fields if not f.advanced %}{{ render_field(f) }}{% endfor %}
+  {% set adv = fields|selectattr("advanced")|list %}
+  {% if adv %}
+    <details class="advanced">
+      <summary>Advanced</summary>
+      {% for f in adv %}{{ render_field(f) }}{% endfor %}
+    </details>
+  {% endif %}
+  <div class="actions">
+    <button type="submit">Save changes</button>
+    {% if section == "signin" %}<button type="submit" formaction="/admin/test/oidc" class="secondary outline">Test connection</button>{% endif %}
+    {% if section == "email" %}<button type="submit" formaction="/admin/test/email" class="secondary outline">Send me a test email</button>{% endif %}
+    {% if section == "notifications" %}<button type="submit" formaction="/admin/test/notify" class="secondary outline">Send a test notification</button>{% endif %}
+    {% if section == "importers" %}<button type="submit" formaction="/admin/test/flaresolverr" class="secondary outline">Test FlareSolverr</button>{% endif %}
+    {% if fields|selectattr("key", "in", overridden)|list %}
+      <button type="submit" name="reset" value="1" class="secondary outline"
+              formnovalidate>Reset to environment values</button>
+    {% endif %}
+  </div>
+  <p class="muted small">Test buttons save this page first. Changes take effect immediately; the background worker picks them up within a minute.</p>
+</form>
+{% endblock %}

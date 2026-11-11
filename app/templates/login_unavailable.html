@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<article class="empty-state">
+  <h1>Sign-in isn't set up yet</h1>
+  <p>An admin needs to set <code>OIDC_ISSUER</code>, <code>OIDC_CLIENT_ID</code> and <code>OIDC_CLIENT_SECRET</code> in <code>.env</code> and restart the app.</p>
+  <p class="muted">For local testing only, <code>DEV_LOGIN=true</code> skips sign-in.</p>
+</article>
+{% endblock %}

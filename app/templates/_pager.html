@@ -1,0 +1,8 @@
+{% if pages > 1 %}
+{% set params = request.query_params | dictsort %}
+<nav class="pager" aria-label="Pages">
+  {% if page > 1 %}<a href="?{% for k, v in params if k != 'page' %}{{ k }}={{ v|urlencode }}&{% endfor %}page={{ page - 1 }}" rel="prev">← Previous page</a>{% else %}<span></span>{% endif %}
+  <span aria-current="page">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a href="?{% for k, v in params if k != 'page' %}{{ k }}={{ v|urlencode }}&{% endfor %}page={{ page + 1 }}" rel="next">Next page →</a>{% else %}<span></span>{% endif %}
+</nav>
+{% endif %}

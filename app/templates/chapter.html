@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, when, who %}
+{% block title %}{{ chapter.title }} · {{ work.title }}{% endblock %}
+{% block content %}
+<div class="read-progress" aria-hidden="true"><span></span></div>
+
+<div class="reader-top">
+  <a href="/works/{{ work.id }}" class="back-link">{{ icon("list") }} {{ work.title }}</a>
+
+  <details class="reader-settings">
+    <summary role="button" class="secondary outline">{{ icon("settings") }} Reading settings</summary>
+    <div class="reader-panel" role="group" aria-label="Reading settings">
+      <div class="setting">
+        <span class="setting-label" id="size-label">Text size</span>
+        <div class="stepper" role="group" aria-labelledby="size-label">
+          <button type="button" class="secondary outline" data-reader-size="-1" aria-label="Smaller text">A−</button>
+          <output id="size-value" aria-live="polite">100%</output>
+          <button type="button" class="secondary outline" data-reader-size="1" aria-label="Larger text">A+</button>
+        </div>
+      </div>
+      <label class="setting">Font
+        <select data-reader-pref="font">
+          <option value="serif">Literata (serif)</option>
+          <option value="sans">Atkinson Hyperlegible (sans)</option>
+          <option value="dyslexic">OpenDyslexic</option>
+          <option value="system">System font</option>
+        </select>
+      </label>
+      <label class="setting">Line spacing
+        <select data-reader-pref="spacing">
+          <option value="normal">Normal</option>
+          <option value="relaxed">Relaxed</option>
+          <option value="loose">Extra loose</option>
+        </select>
+      </label>
+      <label class="setting">Line width
+        <select data-reader-pref="width">
+          <option value="narrow">Narrow</option>
+          <option value="medium">Medium</option>
+          <option value="wide">Wide</option>
+        </select>
+      </label>
+      <label class="setting">Page colour
+        <select data-reader-pref="paper">
+          <option value="default">Match site theme</option>
+          <option value="light">Light</option>
+          <option value="sepia">Sepia</option>
+          <option value="dark">Dark</option>
+          <option value="contrast">High contrast</option>
+        </select>
+      </label>
+      <button type="button" class="secondary outline reset" data-reader-reset>Reset to defaults</button>
+      <p class="muted small">Saved in this browser. Tip: use the ← and → arrow keys to change chapters.</p>
+    </div>
+  </details>
+</div>
+
+<article class="reader" data-reader {% if work.language|lang_code %}lang="{{ work.language|lang_code }}"{% endif %}>
+  <header class="reader-head">
+    <p class="reader-kicker">Chapter {{ chapter.number }} of {{ work.chapters|length }}</p>
+    <h1>{{ chapter.title }}</h1>
+    <p class="muted small">
+      {{ chapter.word_count|num }} words · about {{ ((chapter.word_count or 0) / 230)|round(0, 'ceil')|int or 1 }} min read
+      · added {{ when(chapter.imported_at) }} by {{ who(chapter.imported_by) }}
+      {% if chapter.source_url %}· <a href="{{ chapter.source_url }}" target="_blank" rel="noopener">original<span class="visually-hidden"> (opens in a new tab)</span></a>{% endif %}
+      · <a href="#comments">{{ comment_count }} comment{{ "" if comment_count == 1 else "s" }}</a>
+    </p>
+  </header>
+  <div class="chapter-body">{{ chapter.content_html|safe }}</div>
+</article>
+
+<nav class="chapter-nav" aria-label="Chapters">
+  {% if prev %}
+    <a href="/works/{{ work.id }}/chapters/{{ prev.number }}" rel="prev" data-nav="prev" class="chapter-nav-link">
+      <span class="dir">{{ icon("arrow-left") }} Previous</span><span class="ch">{{ prev.title }}</span>
+    </a>
+  {% else %}<span></span>{% endif %}
+  <a href="/works/{{ work.id }}" class="chapter-nav-toc">{{ icon("list") }} Contents</a>
+  {% if next %}
+    <a href="/works/{{ work.id }}/chapters/{{ next.number }}" rel="next" data-nav="next" class="chapter-nav-link next">
+      <span class="dir">Next {{ icon("arrow-right") }}</span><span class="ch">{{ next.title }}</span>
+    </a>
+  {% else %}
+    <span class="chapter-nav-end">You're all caught up.</span>
+  {% endif %}
+</nav>
+
+<div class="reader-comments">
+  {% include "_comments.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, when, site_badge, status_pill %}
+{% block title %}Library · {{ settings.site_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <hgroup>
+    <h1>Library</h1>
+    <p>{{ total }} work{{ "" if total == 1 else "s" }}{% if filters.q or filters.site or filters.added_by or filters.status or filters.mine %} matching your filters{% endif %}</p>
+  </hgroup>
+  <a href="/add" role="button">{{ icon("plus") }} Add works</a>
+</div>
+
+<form method="get" class="filters" role="search" aria-label="Filter the library">
+  <div class="field grow">
+    <label for="f-q">Search</label>
+    <input id="f-q" type="search" name="q" value="{{ filters.q }}" placeholder="Title or author">
+  </div>
+  <div class="field">
+    <label for="f-site">Site</label>
+    <select id="f-site" name="site">
+      <option value="">All sites</option>
+      {% for s in sites %}<option value="{{ s }}" {% if s == filters.site %}selected{% endif %}>{{ site_label(s) }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-added">Imported by</label>
+    <select id="f-added" name="added_by">
+      <option value="">Anyone</option>
+      {% for u in users %}<option value="{{ u.id }}" {% if u.id == filters.added_by %}selected{% endif %}>{{ u.label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-status">Status</label>
+    <select id="f-status" name="status">
+      <option value="">Any</option>
+      <option value="ongoing" {% if filters.status == "ongoing" %}selected{% endif %}>In progress</option>
+      <option value="complete" {% if filters.status == "complete" %}selected{% endif %}>Complete</option>
+    </select>
+  </div>
+  <div class="field check">
+    <label><input type="checkbox" name="mine" value="1" {% if filters.mine %}checked{% endif %}> Only works I follow</label>
+  </div>
+  <div class="field buttons">
+    <button type="submit">Apply</button>
+    {% if filters.q or filters.site or filters.added_by or filters.status or filters.mine %}<a href="/" class="secondary">Clear</a>{% endif %}
+  </div>
+</form>
+
+{% if not rows %}
+  <article class="empty-state">
+    {% if total == 0 and not (filters.q or filters.site or filters.added_by or filters.status or filters.mine) %}
+      <h2>Your library is empty</h2>
+      <p>Paste a link to a story to import it. New chapters will arrive automatically.</p>
+      <a href="/add" role="button">{{ icon("plus") }} Import your first work</a>
+    {% else %}
+      <h2>No works match</h2>
+      <p>Try removing a filter or searching for something else.</p>
+      <a href="/" role="button" class="secondary">Clear filters</a>
+    {% endif %}
+  </article>
+{% else %}
+<ul class="work-grid" role="list">
+  {% for work, chapter_count in rows %}
+  <li>
+    <article class="work-card">
+      <div class="card-badges">
+        {{ site_badge(work.site) }}
+        {{ status_pill(work.status) }}
+        {% if work.id in followed %}<span class="pill pill-following">{{ icon("star") }} Following</span>{% endif %}
+      </div>
+      <h2 class="card-title"><a href="/works/{{ work.id }}">{{ work.title }}</a></h2>
+      <p class="byline">by {{ work.author or "unknown author" }}</p>
+      {% if work.fandoms %}<p class="fandoms">{{ work.fandoms[:3]|join(" · ") }}</p>{% endif %}
+      <dl class="card-stats">
+        <div><dt>Chapters</dt><dd>{{ chapter_count }}</dd></div>
+        <div><dt>Words</dt><dd>{{ work.word_count|num }}</dd></div>
+        <div><dt>Updated</dt><dd>{{ when(work.last_new_chapter_at or work.created_at) }}</dd></div>
+      </dl>
+      <p class="card-foot">
+        Imported by {{ work.added_by.label if work.added_by else "a removed user" }}
+        {% if work.last_error %}<span class="warn">{{ icon("alert") }} Last update check failed</span>{% endif %}
+      </p>
+    </article>
+  </li>
+  {% endfor %}
+</ul>
+{% include "_pager.html" %}
+{% endif %}
+{% endblock %}

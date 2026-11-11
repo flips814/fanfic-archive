@@ -1,0 +1,85 @@
+# Local test stack: everything needed to click through the whole app with no real accounts.
+#
+#   wsl docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
+#
+#   App            http://localhost:8000
+#   Fake SSO       http://localhost:8080   (log in as anyone; paste claims JSON for name/email/admin)
+#   Mailpit        http://localhost:8025   (every email the app sends)
+#   ntfy           http://localhost:8090/fanfic-all   (server-wide push notifications)
+#   FlareSolverr   started via --profile flaresolverr (scripts/test-stack.ps1 does this)
+#
+# Automated tests:
+#   wsl docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
+
+x-test-env: &test-env
+  BASE_URL: http://localhost:8000
+  SECRET_KEY: local-test-secret-key-not-for-production
+  OIDC_PROVIDER_NAME: Mock SSO
+  OIDC_ISSUER: http://oidc:8080/default
+  OIDC_AUTHORIZE_URL: http://localhost:8080/default/authorize
+  OIDC_END_SESSION_URL: http://localhost:8080/default/endsession
+  OIDC_CLIENT_ID: fanfic-archive
+  OIDC_CLIENT_SECRET: test-secret
+  OIDC_GROUPS_CLAIM: groups
+  OIDC_ADMIN_GROUP: admins
+  DEV_LOGIN: "false"
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  SMTP_STARTTLS: "false"
+  SMTP_SSL: "false"
+  SMTP_USER: ""
+  SMTP_FROM: Fanfic Archive <fanfic@test.local>
+  APPRISE_URLS: ntfy://ntfy/fanfic-all
+  DISCORD_WEBHOOK_URL: ""
+  UPDATE_INTERVAL_MINUTES: "5"
+  COMPLETED_UPDATE_INTERVAL_MINUTES: "5"
+  DELAY_BETWEEN_WORKS_SECONDS: "1"
+  WORKER_POLL_SECONDS: "3"
+  FLARESOLVERR_URL: http://flaresolverr:8191
+
+services:
+  web:
+    environment:
+      <<: *test-env
+    depends_on:
+      oidc:
+        condition: service_started
+
+  worker:
+    environment:
+      <<: *test-env
+
+  oidc:
+    image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      JSON_CONFIG: '{"interactiveLogin": true}'
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    restart: unless-stopped
+    command: serve
+    ports:
+      - "8090:80"
+
+  tests:
+    build: .
+    image: fanfic-archive:latest
+    profiles: ["tests"]
+    restart: "no"
+    depends_on: []
+    user: root
+    working_dir: /work
+    volumes:
+      - .:/work
+    environment:
+      DATABASE_URL: ""
+    command: ["sh", "-c", "pip install -q -r requirements-dev.txt && python -m pytest -q"]

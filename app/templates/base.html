@@ -1,0 +1,85 @@
+{% from "_macros.html" import icon %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}{{ settings.site_name }}{% endblock %}</title>
+  <script>
+    (function () {
+      var t = localStorage.getItem("theme");
+      if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.bunny.net">
+  <link rel="stylesheet" href="https://fonts.bunny.net/css?family=atkinson-hyperlegible:400,400i,700|literata:400,400i,700&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.violet.min.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
+  <script src="/static/app.js?v={{ static_version }}" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header">
+    <nav class="container" aria-label="Main">
+      <ul>
+        <li>
+          <a href="/" class="brand">{{ icon("book") }}<span>{{ settings.site_name }}</span></a>
+        </li>
+      </ul>
+      <ul class="nav-links">
+        {% if user %}
+          {% set path = request.url.path %}
+          {% for href, label in [("/", "Library"), ("/add", "Add works"), ("/activity", "Activity"), ("/users", "Users")] %}
+            {% set active = (path == href) if href == "/" else (path.startswith(href)) %}
+            <li><a href="{{ href }}" {% if active or (href == "/" and path.startswith("/works")) %}aria-current="page"{% endif %}>{{ label }}</a></li>
+          {% endfor %}
+          {% if user.is_admin %}<li><a href="/admin" {% if path.startswith("/admin") %}aria-current="page"{% endif %}>Admin</a></li>{% endif %}
+        {% endif %}
+      </ul>
+      <ul class="nav-tools">
+        <li>
+          <button type="button" class="theme-toggle outline secondary" data-theme-toggle aria-pressed="false">
+            <span class="theme-icon-dark">{{ icon("moon") }}</span><span class="theme-icon-light">{{ icon("sun") }}</span>
+            <span class="theme-label">Dark mode</span>
+          </button>
+        </li>
+        {% if user %}
+          <li>
+            <details class="dropdown user-menu">
+              <summary aria-label="Account menu for {{ user.label }}">
+                <span class="avatar" aria-hidden="true">{{ user.label[:1]|upper }}</span>
+                <span class="user-name">{{ user.label }}</span>
+              </summary>
+              <ul dir="rtl">
+                <li dir="ltr"><span class="muted">{{ user.email or user.label }}{% if user.is_admin %} · admin{% endif %}</span></li>
+                <li dir="ltr"><a href="/settings" {% if request.url.path.startswith('/settings') %}aria-current="page"{% endif %}>Settings</a></li>
+                <li dir="ltr"><a href="/logout">Log out</a></li>
+              </ul>
+            </details>
+          </li>
+        {% elif not request.url.path.startswith(("/setup", "/login")) %}
+          <li><a href="/login" role="button">Sign in</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main" class="container" tabindex="-1">
+    <div class="flash-region" role="status" aria-live="polite">
+      {% for message in messages %}
+        <article class="flash">
+          <p>{{ message }}</p>
+          <button type="button" class="flash-close" data-dismiss aria-label="Dismiss message">{{ icon("x") }}</button>
+        </article>
+      {% endfor %}
+    </div>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer container">
+    <small>{{ settings.site_name }} · a personal fanfiction archive. Please respect authors and the sites you import from.</small>
+  </footer>
+</body>
+</html>

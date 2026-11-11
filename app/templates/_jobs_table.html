@@ -1,0 +1,39 @@
+{% from "_macros.html" import when, job_status, who %}
+{% if not jobs %}
+<p class="muted">Nothing here yet.</p>
+{% else %}
+<div class="table-wrap" role="region" aria-label="{{ caption }}" tabindex="0">
+<table class="striped">
+  <caption class="visually-hidden">{{ caption }}</caption>
+  <thead>
+    <tr>
+      <th scope="col">When</th>
+      <th scope="col">Who</th>
+      <th scope="col">Action</th>
+      {% if show_work %}<th scope="col">Work</th>{% endif %}
+      <th scope="col">Result</th>
+      <th scope="col">New chapters</th>
+      <th scope="col">Details</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for job in jobs %}
+    <tr>
+      <td class="nowrap">{{ when(job.created_at) }}</td>
+      <td class="nowrap">{{ who(job.requested_by) }}</td>
+      <td class="nowrap">{{ "Import" if job.kind == "import" else "Update check" }}</td>
+      {% if show_work %}
+      <td>
+        {% if job.work_id %}<a href="/works/{{ job.work_id }}">{{ job.work_title or job.url }}</a>
+        {% else %}<a href="{{ job.url }}" target="_blank" rel="noopener" class="break">{{ job.url }}<span class="visually-hidden"> (opens in a new tab)</span></a>{% endif %}
+      </td>
+      {% endif %}
+      <td class="nowrap">{{ job_status(job.status) }}</td>
+      <td>{{ job.chapters_added }}</td>
+      <td class="details">{{ job.message or "" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}

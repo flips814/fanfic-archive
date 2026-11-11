@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Add works · {{ settings.site_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <hgroup>
+    <h1>Add works</h1>
+    <p>Paste links to stories and they'll be imported in the background. You'll follow them automatically.</p>
+  </hgroup>
+</div>
+
+<form method="post" action="/add" class="add-form">
+  <label for="urls">Story links, one per line</label>
+  <textarea id="urls" name="urls" rows="7" required aria-describedby="urls-help" spellcheck="false"
+            placeholder="https://archiveofourown.org/works/123456
+https://www.fanfiction.net/s/1234567/1/
+https://www.wattpad.com/story/123456789-title
+https://someblog.tumblr.com/tagged/my-fic"></textarea>
+  <small id="urls-help">You can paste several at once. Progress shows on the Activity page.</small>
+  <button type="submit">{{ icon("plus") }} Import</button>
+</form>
+
+<section aria-labelledby="sites-h">
+  <h2 id="sites-h" class="section-title">Supported sites</h2>
+  <ul class="site-grid" role="list">
+    <li>
+      <span class="badge site-archiveofourown-org">AO3</span>
+      <p>Work links like <code>/works/123456</code>. For works locked to logged-in users, add your AO3 login in <a href="/settings#logins">Settings</a>.</p>
+    </li>
+    <li>
+      <span class="badge site-www-fanfiction-net">FanFiction.net</span>
+      <p>Story links like <code>/s/1234567/1/</code>. Also FictionPress. Pages load slowly because of Cloudflare protection.</p>
+    </li>
+    <li>
+      <span class="badge site-www-wattpad-com">Wattpad</span>
+      <p>Story links like <code>/story/123456789-title</code>.</p>
+    </li>
+    <li>
+      <span class="badge site-tumblr-com">Tumblr</span>
+      <p>A single post (one chapter), or a blog's tag page, where each post becomes a chapter and new posts become new chapters. Blogs that need a Tumblr login can't be imported.</p>
+    </li>
+    <li>
+      <span class="badge">And more</span>
+      <p>Royal Road, SpaceBattles, Sufficient Velocity and <a href="https://github.com/JimmXinu/FanFicFare/wiki/SupportedSites" target="_blank" rel="noopener">every other site FanFicFare supports<span class="visually-hidden"> (opens in a new tab)</span></a>.</p>
+    </li>
+  </ul>
+</section>
+{% endblock %}

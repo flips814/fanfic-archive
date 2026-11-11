@@ -1,0 +1,93 @@
+{#- Expects: work, comments, comment_count, user; optional: chapter -#}
+{% from "_macros.html" import icon, when %}
+
+{% macro comment_form(action_label, parent=None, body="", spoiler=False, form_id="new") -%}
+<form method="post" action="/works/{{ work.id }}/comments" class="comment-form">
+  {% if chapter %}<input type="hidden" name="chapter_id" value="{{ chapter.id }}">{% endif %}
+  {% if parent %}<input type="hidden" name="parent_id" value="{{ parent.id }}">{% endif %}
+  <label for="comment-body-{{ form_id }}">{{ action_label }}</label>
+  <textarea id="comment-body-{{ form_id }}" name="body" rows="{{ 3 if parent else 4 }}" required
+            maxlength="{{ comment_max_length }}" aria-describedby="comment-help-{{ form_id }}"
+            data-counter="comment-count-{{ form_id }}">{{ body }}</textarea>
+  <div class="comment-form-foot">
+    <small id="comment-help-{{ form_id }}">Plain text; links become clickable.
+      <span id="comment-count-{{ form_id }}" aria-live="polite"></span></small>
+    <label class="spoiler-check"><input type="checkbox" name="spoiler" value="1" {% if spoiler %}checked{% endif %}> Contains spoilers</label>
+  </div>
+  <button type="submit">{{ "Reply" if parent else "Post comment" }}</button>
+</form>
+{%- endmacro %}
+
+{% macro render_comment(c, is_reply=False) -%}
+<article class="comment{{ ' comment-reply' if is_reply }}" id="comment-{{ c.id }}" aria-labelledby="comment-{{ c.id }}-author">
+  {% if c.deleted %}
+    <p class="muted comment-deleted">This comment was deleted.</p>
+  {% else %}
+  <header class="comment-head">
+    <span class="avatar" aria-hidden="true">{{ (c.user.label if c.user else "?")[:1]|upper }}</span>
+    <span id="comment-{{ c.id }}-author" class="comment-author">{{ c.user.label if c.user else "Removed user" }}</span>
+    {% if c.user and c.user_id == work.added_by_id %}<span class="pill">imported this</span>{% endif %}
+    <a href="#comment-{{ c.id }}" class="comment-time" aria-label="Link to this comment">{{ when(c.created_at) }}</a>
+    {% if c.edited_at %}<span class="muted small">(edited {{ when(c.edited_at) }})</span>{% endif %}
+  </header>
+  <div class="comment-body">
+    {% if c.spoiler %}
+      <details class="spoiler">
+        <summary>Spoiler: show comment</summary>
+        {{ c.body|comment_body }}
+      </details>
+    {% else %}
+      {{ c.body|comment_body }}
+    {% endif %}
+  </div>
+  <footer class="comment-actions">
+    <details class="comment-action">
+      <summary>Reply<span class="visually-hidden"> to {{ c.user.label if c.user else "this comment" }}</span></summary>
+      {{ comment_form("Your reply", parent=c, form_id="reply-" ~ c.id) }}
+    </details>
+    {% if c.user_id == user.id %}
+      <details class="comment-action">
+        <summary>Edit<span class="visually-hidden"> your comment</span></summary>
+        <form method="post" action="/comments/{{ c.id }}/edit" class="comment-form">
+          <label for="comment-edit-{{ c.id }}">Edit your comment</label>
+          <textarea id="comment-edit-{{ c.id }}" name="body" rows="3" required maxlength="{{ comment_max_length }}">{{ c.body }}</textarea>
+          <label class="spoiler-check"><input type="checkbox" name="spoiler" value="1" {% if c.spoiler %}checked{% endif %}> Contains spoilers</label>
+          <button type="submit">Save changes</button>
+        </form>
+      </details>
+    {% endif %}
+    {% if c.user_id == user.id or user.is_admin %}
+      <form method="post" action="/comments/{{ c.id }}/delete" class="inline" data-confirm="Delete this comment?">
+        <button class="link danger-link">Delete<span class="visually-hidden"> comment by {{ c.user.label if c.user else "removed user" }}</span></button>
+      </form>
+    {% endif %}
+  </footer>
+  {% endif %}
+</article>
+{%- endmacro %}
+
+<section id="comments" class="comments" aria-labelledby="comments-h">
+  <h2 id="comments-h" class="section-title">
+    {{ icon("chat") }} {{ "Chapter comments" if chapter else "Comments" }} <span class="count">({{ comment_count }})</span>
+  </h2>
+
+  {% if comments %}
+    <ol class="comment-list" role="list">
+      {% for c in comments %}
+        <li>
+          {{ render_comment(c) }}
+          {% set live_replies = c.replies|rejectattr("deleted")|list %}
+          {% if live_replies %}
+            <ol class="comment-replies" role="list" aria-label="Replies to {{ c.user.label if (c.user and not c.deleted) else 'this comment' }}">
+              {% for r in live_replies %}<li>{{ render_comment(r, is_reply=True) }}</li>{% endfor %}
+            </ol>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ol>
+  {% else %}
+    <p class="muted">No comments yet. {{ "What did you think of this chapter?" if chapter else "Start the conversation!" }}</p>
+  {% endif %}
+
+  {{ comment_form("Add a comment" if not chapter else "Comment on this chapter") }}
+</section>

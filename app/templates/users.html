@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, when %}
+{% block title %}Users · {{ settings.site_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <hgroup>
+    <h1>Users</h1>
+    <p>Who's importing what.</p>
+  </hgroup>
+</div>
+
+<div class="table-wrap" role="region" aria-label="Users" tabindex="0">
+<table class="striped">
+  <caption class="visually-hidden">Users and what each has imported</caption>
+  <thead>
+    <tr>
+      <th scope="col">User</th>
+      <th scope="col">Email</th>
+      <th scope="col">Works imported</th>
+      <th scope="col">Chapters imported</th>
+      <th scope="col">Following</th>
+      <th scope="col">Joined</th>
+      <th scope="col">Last login</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for u, works_added, chapters_imported, following in rows %}
+    <tr>
+      <th scope="row" class="user-cell">
+        <span class="avatar" aria-hidden="true">{{ u.label[:1]|upper }}</span>
+        {{ u.label }}{% if u.is_admin %} <span class="pill">admin</span>{% endif %}
+      </th>
+      <td>{{ u.email or "—" }}</td>
+      <td><a href="/?added_by={{ u.id }}" aria-label="{{ works_added }} works imported by {{ u.label }}">{{ works_added }}</a></td>
+      <td>{{ chapters_imported }}</td>
+      <td>{{ following }}</td>
+      <td class="nowrap">{{ when(u.created_at) }}</td>
+      <td class="nowrap">{{ when(u.last_login_at) }}</td>
+    </tr>
+  {% endfor %}
+    <tr>
+      <th scope="row" class="user-cell"><span class="avatar auto" aria-hidden="true">{{ icon("refresh") }}</span> <em>auto-updater</em></th>
+      <td>—</td><td>—</td>
+      <td><a href="/activity?user_id=0" aria-label="{{ auto_chapters }} chapters imported by the auto-updater">{{ auto_chapters }}</a></td>
+      <td>—</td><td>—</td><td>—</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+{% endblock %}

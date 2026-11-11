@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block content %}
+<section class="hero">
+  <h1>Your fanfiction, all in one place.</h1>
+  <p class="lead">Save works from AO3, FanFiction.net, Wattpad, Tumblr and more. New chapters are imported automatically, and you get a message when the stories you follow update.</p>
+  <p><a href="/login" role="button" class="hero-cta">Sign in with {{ settings.oidc_provider_name }}</a></p>
+</section>
+
+<section class="feature-grid" aria-label="Features">
+  <article>
+    <h2>{{ icon("plus") }} Import from anywhere</h2>
+    <p>Paste a link from AO3, FanFiction.net, Wattpad, Tumblr or about a hundred other sites.</p>
+  </article>
+  <article>
+    <h2>{{ icon("refresh") }} Always up to date</h2>
+    <p>Works are re-checked on a schedule, and only new chapters are downloaded.</p>
+  </article>
+  <article>
+    <h2>{{ icon("book") }} Comfortable reading</h2>
+    <p>Pick your text size, font, spacing and page colour, or download an EPUB for your e-reader.</p>
+  </article>
+</section>
+{% endblock %}

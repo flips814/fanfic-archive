@@ -1,0 +1,21 @@
+## FanFicFare settings. Copy to config/personal.ini (mounted read-only into the containers).
+## Full reference: https://github.com/JimmXinu/FanFicFare/wiki/INI-File
+
+[defaults]
+## Be polite: seconds to wait between page requests.
+slow_down_sleep_time:2
+
+[archiveofourown.org]
+## Users normally add their own AO3 login in the web UI (Settings -> Site logins).
+## A login here is only a server-wide fallback, used when nobody involved has one.
+#username:your_ao3_username
+#password:your_ao3_password
+
+[www.fanfiction.net]
+## FanFiction.net is behind Cloudflare. FlareSolverr is configured from .env
+## (COMPOSE_PROFILES / FLARESOLVERR_URL), so nothing is needed here.
+
+[www.wattpad.com]
+## Wattpad usually works without login.
+#username:
+#password:

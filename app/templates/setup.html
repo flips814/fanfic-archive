@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Set up · Fanfic Archive{% endblock %}
+{% block content %}
+{% set form = form or {} %}
+<div class="setup">
+  <hgroup>
+    <h1>Welcome! Let's set up your archive</h1>
+    <p>This takes a minute. You can change all of it later in the Admin panel.</p>
+  </hgroup>
+
+  {% if errors %}
+    <article class="notice notice-error" role="alert" aria-labelledby="setup-errors-h">
+      <strong id="setup-errors-h">Please fix the following:</strong>
+      <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+    </article>
+  {% endif %}
+
+  <form method="post" action="/setup" class="settings-card">
+    <fieldset>
+      <legend><strong>1. Prove you're the owner</strong></legend>
+      <label for="s-code">Setup code</label>
+      <input id="s-code" name="code" required autocomplete="off" autocapitalize="characters" spellcheck="false"
+             placeholder="XXXX-XXXX-XXXX" aria-describedby="s-code-help">
+      <small id="s-code-help">It's printed in the web container's log. Run
+        <code>docker compose logs web</code> (or <code>wsl docker compose logs web</code> on Windows) and look for “First-time setup”.</small>
+    </fieldset>
+
+    <fieldset>
+      <legend><strong>2. Name your archive</strong></legend>
+      <label for="s-name">Site name</label>
+      <input id="s-name" name="site_name" value="{{ form.site_name or settings.site_name }}">
+      <label for="s-url">Public URL</label>
+      <input id="s-url" name="base_url" type="url" value="{{ form.base_url or suggested_url or settings.base_url }}" aria-describedby="s-url-help">
+      <small id="s-url-help">The address you and others type to reach this site. This is filled in with the address you're using right now; change it if others will use a different one.</small>
+    </fieldset>
+
+    <fieldset>
+      <legend><strong>3. Create the admin account</strong></legend>
+      {% if sso_ready %}
+        <label><input type="radio" name="mode" value="local" {% if form.mode != "sso" %}checked{% endif %}> Create an admin account with a password (recommended; works even if SSO breaks)</label>
+        <label><input type="radio" name="mode" value="sso" {% if form.mode == "sso" %}checked{% endif %}> Skip; admins come from my SSO admin emails/group</label>
+      {% else %}
+        <input type="hidden" name="mode" value="local">
+      {% endif %}
+      <div class="grid">
+        <div>
+          <label for="s-user">Username</label>
+          <input id="s-user" name="username" value="{{ form.username or 'admin' }}" autocomplete="username" autocapitalize="off" spellcheck="false">
+        </div>
+        <div>
+          <label for="s-display">Display name</label>
+          <input id="s-display" name="display_name" value="{{ form.display_name or '' }}" placeholder="Optional">
+        </div>
+      </div>
+      <div class="grid">
+        <div>
+          <label for="s-pass">Password</label>
+          <input id="s-pass" name="password" type="password" autocomplete="new-password" minlength="8" aria-describedby="s-pass-help">
+          <small id="s-pass-help">At least 8 characters.</small>
+        </div>
+        <div>
+          <label for="s-pass2">Password again</label>
+          <input id="s-pass2" name="password_confirm" type="password" autocomplete="new-password" minlength="8">
+        </div>
+      </div>
+    </fieldset>
+
+    <button type="submit">Finish setup</button>
+  </form>
+</div>
+{% endblock %}

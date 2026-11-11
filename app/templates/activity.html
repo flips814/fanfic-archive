@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Activity · {{ settings.site_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <hgroup>
+    <h1>Activity</h1>
+    <p>Every import and update check: who asked for it, what it was, and what happened.</p>
+  </hgroup>
+</div>
+
+<form method="get" class="filters" aria-label="Filter activity">
+  <div class="field">
+    <label for="a-user">Who</label>
+    <select id="a-user" name="user_id">
+      <option value="">Everyone</option>
+      <option value="0" {% if filters.user_id == 0 %}selected{% endif %}>Auto-updater</option>
+      {% for u in users %}<option value="{{ u.id }}" {% if u.id == filters.user_id %}selected{% endif %}>{{ u.label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="a-kind">Action</label>
+    <select id="a-kind" name="kind">
+      <option value="">Imports &amp; update checks</option>
+      <option value="import" {% if filters.kind == "import" %}selected{% endif %}>Imports only</option>
+      <option value="update" {% if filters.kind == "update" %}selected{% endif %}>Update checks only</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="a-status">Result</label>
+    <select id="a-status" name="status">
+      <option value="">Any result</option>
+      {% for value, label in [("queued", "Queued"), ("running", "Running"), ("done", "Done"), ("failed", "Failed")] %}
+        <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field buttons"><button type="submit">Apply</button></div>
+</form>
+
+{% set show_work = true %}
+{% set caption = "Import and update activity" %}
+{% include "_jobs_table.html" %}
+{% include "_pager.html" %}
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% from "_macros.html" import when %}
+{% block title %}Settings · {{ settings.site_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <hgroup>
+    <h1>Settings</h1>
+    <p>Your site logins and how you'd like to hear about updates.</p>
+  </hgroup>
+</div>
+
+<nav class="toc" aria-label="On this page">
+  <a href="#logins">Site logins</a> · <a href="#notifications">Notifications</a>
+</nav>
+
+<section id="logins" aria-labelledby="logins-h" class="settings-card">
+  <hgroup>
+    <h2 id="logins-h">Site logins</h2>
+    <p>Some works are only visible to logged-in users. Add your own account and it's used for works you import, check, or follow.</p>
+  </hgroup>
+  {% for site, label in login_sites.items() %}
+    {% set login = logins.get(site) %}
+    <form method="post" action="/settings/logins/{{ site }}">
+      <fieldset>
+        <legend><strong>{{ label }}</strong> {% if login %}<small class="muted">· saved {{ when(login.updated_at) }}</small>{% else %}<small class="muted">· not set</small>{% endif %}</legend>
+        <div class="grid">
+          <div>
+            <label for="{{ site }}-user">Username</label>
+            <input id="{{ site }}-user" type="text" name="username" value="{{ login.username if login else '' }}" autocomplete="off" autocapitalize="off" spellcheck="false">
+          </div>
+          <div>
+            <label for="{{ site }}-pass">Password</label>
+            <input id="{{ site }}-pass" type="password" name="password" autocomplete="new-password"
+                   aria-describedby="{{ site }}-pass-help"
+                   placeholder="{{ 'Leave blank to keep the saved password' if login else '' }}">
+            <small id="{{ site }}-pass-help">{% if login %}Leave blank to keep the saved password.{% else %}Stored encrypted; never shown again.{% endif %}</small>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit">Save {{ label }} login</button>
+          {% if login %}<button type="submit" name="remove" value="1" class="secondary outline">Remove</button>{% endif %}
+        </div>
+      </fieldset>
+    </form>
+  {% endfor %}
+  <p class="muted small">Passwords are encrypted with the server's <code>SECRET_KEY</code>. Server admins could still technically recover them, so use a password you don't use anywhere else.</p>
+</section>
+
+<section id="notifications" aria-labelledby="notify-h" class="settings-card">
+  <hgroup>
+    <h2 id="notify-h">Notifications</h2>
+    <p>You're notified when a work you follow gets new chapters. Works you import are followed automatically.</p>
+  </hgroup>
+
+  <form method="post" action="/settings">
+    <fieldset>
+      <legend><strong>Email</strong></legend>
+      {% if settings.email_enabled %}
+        <label><input type="checkbox" role="switch" name="notify_email" value="true" {% if user.notify_email %}checked{% endif %}> Email me about updates</label>
+        <label for="n-email">Send to</label>
+        <input id="n-email" type="email" name="notify_email_address" value="{{ user.notify_email_address or '' }}"
+               placeholder="{{ user.email or 'you@example.com' }}" aria-describedby="n-email-help" autocomplete="email">
+        <small id="n-email-help">Leave blank to use your login email ({{ user.email or "none provided by your sign-in provider" }}).</small>
+      {% else %}
+        <p class="muted">Email isn't set up on this server yet (an admin needs to set <code>SMTP_*</code> in <code>.env</code>).</p>
+        <input type="hidden" name="notify_email" value="{{ 'true' if user.notify_email else 'false' }}">
+      {% endif %}
+    </fieldset>
+
+    <fieldset>
+      <legend><strong>Discord</strong></legend>
+      <label for="n-discord">Webhook URL</label>
+      <input id="n-discord" type="url" name="discord_webhook_url" value="{{ user.discord_webhook_url or '' }}"
+             placeholder="https://discord.com/api/webhooks/…" aria-describedby="n-discord-help">
+      <small id="n-discord-help">In Discord: channel settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.</small>
+    </fieldset>
+
+    <fieldset>
+      <legend><strong>Other apps (Apprise)</strong></legend>
+      <label for="n-apprise">Apprise URLs, one per line</label>
+      <textarea id="n-apprise" name="apprise_urls" rows="4" aria-describedby="n-apprise-help" spellcheck="false"
+                placeholder="tgram://bottoken/chatid
+ntfy://ntfy.sh/my-fic-topic
+pover://user@token">{{ user.apprise_urls or '' }}</textarea>
+      <small id="n-apprise-help">Telegram, ntfy, Pushover, Slack, Matrix, Gotify and 100+ more. See the <a href="https://github.com/caronc/apprise/wiki" target="_blank" rel="noopener">Apprise wiki<span class="visually-hidden"> (opens in a new tab)</span></a>.</small>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit">Save notification settings</button>
+      <button type="submit" formaction="/settings/test" class="secondary outline">Send a test notification</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, when %}
+{% block title %}Users · Admin · {{ settings.site_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <hgroup>
+    <h1>Manage users</h1>
+    <p>Roles, access and accounts with passwords.</p>
+  </hgroup>
+</div>
+{% include "admin/_nav.html" %}
+
+<div class="table-wrap" role="region" aria-label="Users" tabindex="0">
+<table class="striped">
+  <caption class="visually-hidden">All users</caption>
+  <thead>
+    <tr><th scope="col">User</th><th scope="col">Signs in with</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Last sign-in</th><th scope="col">Actions</th></tr>
+  </thead>
+  <tbody>
+  {% for u in users %}
+    <tr {% if u.disabled %}class="row-disabled"{% endif %}>
+      <th scope="row" class="user-cell">
+        <span class="avatar" aria-hidden="true">{{ u.label[:1]|upper }}</span>
+        <span>{{ u.label }}{% if u.id == user.id %} <span class="muted">(you)</span>{% endif %}<br><small class="muted">{{ u.email or u.username or "" }}</small></span>
+      </th>
+      <td>{{ "Password" if u.is_local else ("Dev login" if u.oidc_issuer == "dev-login" else "SSO") }}</td>
+      <td>
+        {{ "Admin" if u.is_admin else "Member" }}
+        {% if not u.is_local and u.admin_override is not none %}<br><small class="muted">set by an admin</small>{% endif %}
+      </td>
+      <td>{{ "Disabled" if u.disabled else "Active" }}</td>
+      <td class="nowrap">{{ when(u.last_login_at) }}</td>
+      <td class="user-actions">
+        <form method="post" action="/admin/users/{{ u.id }}/role" class="inline">
+          <button class="link">{{ "Remove admin" if u.is_admin else "Make admin" }}<span class="visually-hidden"> for {{ u.label }}</span></button>
+        </form>
+        {% if not u.is_local and u.admin_override is not none %}
+          <form method="post" action="/admin/users/{{ u.id }}/sso-role" class="inline">
+            <button class="link">Use SSO role<span class="visually-hidden"> for {{ u.label }}</span></button>
+          </form>
+        {% endif %}
+        {% if u.id != user.id %}
+          <form method="post" action="/admin/users/{{ u.id }}/disable" class="inline"
+                {% if not u.disabled %}data-confirm="Disable {{ u.label }}? They'll be signed out and can't sign in until re-enabled."{% endif %}>
+            <button class="link {{ '' if u.disabled else 'danger-link' }}">{{ "Enable" if u.disabled else "Disable" }}<span class="visually-hidden"> {{ u.label }}</span></button>
+          </form>
+        {% endif %}
+        {% if u.is_local %}
+          <details class="comment-action">
+            <summary>Set password<span class="visually-hidden"> for {{ u.label }}</span></summary>
+            <form method="post" action="/admin/users/{{ u.id }}/password">
+              <label for="pw-{{ u.id }}">New password for {{ u.label }}</label>
+              <input id="pw-{{ u.id }}" name="password" type="password" minlength="8" required autocomplete="new-password">
+              <button type="submit">Change password</button>
+            </form>
+          </details>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<section aria-labelledby="create-h" class="settings-card">
+  <h2 id="create-h" class="section-title">Create an account with a password</h2>
+  <p class="muted">For people without an SSO account, or as a backup admin login in case SSO stops working.</p>
+  <form method="post" action="/admin/users/create">
+    <div class="grid">
+      <div><label for="c-user">Username</label><input id="c-user" name="username" required autocapitalize="off" spellcheck="false" autocomplete="off"></div>
+      <div><label for="c-name">Display name</label><input id="c-name" name="display_name" placeholder="Optional"></div>
+    </div>
+    <div class="grid">
+      <div><label for="c-email">Email</label><input id="c-email" name="email" type="email" placeholder="Optional, for notifications"></div>
+      <div><label for="c-pass">Password</label><input id="c-pass" name="password" type="password" minlength="8" required autocomplete="new-password" aria-describedby="c-pass-help"><small id="c-pass-help">At least 8 characters.</small></div>
+    </div>
+    <label><input type="checkbox" name="make_admin" value="1"> Make this account an admin</label>
+    <button type="submit">Create account</button>
+  </form>
+</section>
+{% endblock %}

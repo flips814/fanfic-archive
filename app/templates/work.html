@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, when, site_badge, status_pill, who %}
+{% block title %}{{ work.title }} · {{ settings.site_name }}{% endblock %}
+{% block content %}
+<nav aria-label="Breadcrumb" class="breadcrumb">
+  <ul><li><a href="/">Library</a></li><li aria-current="page">{{ work.title }}</li></ul>
+</nav>
+
+<header class="work-hero">
+  <div class="card-badges">
+    {{ site_badge(work.site) }}
+    {{ status_pill(work.status) }}
+    {% if work.rating %}<span class="pill">{{ work.rating }}</span>{% endif %}
+    <a href="#comments" class="pill pill-link">{{ icon("chat") }} {{ comment_count }} comment{{ "" if comment_count == 1 else "s" }}</a>
+  </div>
+  <h1>{{ work.title }}</h1>
+  <p class="byline">
+    by {% if work.author_url %}<a href="{{ work.author_url }}" target="_blank" rel="noopener">{{ work.author or "unknown author" }}<span class="visually-hidden"> (opens in a new tab)</span></a>{% else %}{{ work.author or "unknown author" }}{% endif %}
+    · <a href="{{ work.source_url }}" target="_blank" rel="noopener">View on {{ site_label(work.site) }}<span class="visually-hidden"> (opens in a new tab)</span></a>
+  </p>
+
+  <div class="actions">
+    {% if work.chapters %}<a role="button" href="/works/{{ work.id }}/chapters/{{ work.chapters[0].number }}">{{ icon("book") }} Start reading</a>{% endif %}
+    <a role="button" class="secondary" href="/works/{{ work.id }}/epub">{{ icon("download") }} Download EPUB</a>
+    <form method="post" action="/works/{{ work.id }}/check"><button class="secondary outline">{{ icon("refresh") }} Check for updates now</button></form>
+    {% if is_following %}
+      <form method="post" action="/works/{{ work.id }}/unfollow"><button class="outline" aria-pressed="true">{{ icon("star") }} Following</button></form>
+    {% else %}
+      <form method="post" action="/works/{{ work.id }}/follow"><button class="outline" aria-pressed="false">{{ icon("star") }} Follow</button></form>
+    {% endif %}
+  </div>
+</header>
+
+{% if work.last_error %}
+  <article class="notice notice-error" role="alert">
+    <strong>{{ icon("alert") }} The last update check failed.</strong>
+    <p>{{ work.last_error }}</p>
+  </article>
+{% endif %}
+
+<section class="stat-grid" aria-label="Details">
+  <div><span class="stat-label">Chapters</span><span class="stat-value">{{ work.chapters|length }}</span></div>
+  <div><span class="stat-label">Words</span><span class="stat-value">{{ work.word_count|num }}</span></div>
+  <div><span class="stat-label">Published</span><span class="stat-value">{{ when(work.published_at, "unknown") }}</span></div>
+  <div><span class="stat-label">Updated on {{ site_label(work.site) }}</span><span class="stat-value">{{ when(work.source_updated_at, "unknown") }}</span></div>
+  <div><span class="stat-label">Imported by</span><span class="stat-value">{{ work.added_by.label if work.added_by else "—" }}</span><span class="stat-sub">{{ when(work.created_at) }}</span></div>
+  <div><span class="stat-label">Last checked</span><span class="stat-value">{{ when(work.last_checked_at) }}</span>
+    <span class="stat-sub">Auto-update {{ "on" if work.auto_update else "off" }}
+      {%- if can_manage %} · <form method="post" action="/works/{{ work.id }}/auto-update" class="inline"><button class="link">turn {{ "off" if work.auto_update else "on" }}</button></form>{% endif %}
+    </span>
+  </div>
+</section>
+
+{% if work.summary_html %}
+<section aria-labelledby="summary-h">
+  <h2 id="summary-h" class="section-title">Summary</h2>
+  <blockquote class="summary">{{ work.summary_html|safe }}</blockquote>
+</section>
+{% endif %}
+
+{% set tag_groups = [("Fandoms", work.fandoms), ("Warnings", work.warnings), ("Relationships", work.relationships), ("Characters", work.characters), ("Tags", work.tags)] %}
+{% if work.fandoms or work.warnings or work.relationships or work.characters or work.tags %}
+<section aria-labelledby="tags-h" class="tag-section">
+  <h2 id="tags-h" class="section-title">Tags</h2>
+  <dl class="tag-groups">
+    {% for label, items in tag_groups if items %}
+      <dt>{{ label }}</dt>
+      <dd><ul class="tags" role="list">{% for t in items %}<li class="tag">{{ t }}</li>{% endfor %}</ul></dd>
+    {% endfor %}
+  </dl>
+</section>
+{% endif %}
+
+<section aria-labelledby="chapters-h">
+  <h2 id="chapters-h" class="section-title">Chapters <span class="count">({{ work.chapters|length }})</span></h2>
+  {% if work.chapters %}
+  <ol class="chapter-list">
+    {% for c in work.chapters %}
+      <li value="{{ c.number }}" {% if c.removed_from_source %}class="removed"{% endif %}>
+        <a href="/works/{{ work.id }}/chapters/{{ c.number }}">{{ c.title }}</a>
+        {% if is_new_chapter(c, work) %}<span class="pill pill-new">New</span>{% endif %}
+        {% if c.removed_from_source %}<span class="pill pill-removed">Removed from {{ site_label(work.site) }}</span>{% endif %}
+        <span class="chapter-meta">{{ c.word_count|num }} words · added {{ when(c.imported_at) }} by {{ who(c.imported_by) }}
+          {%- set n = chapter_comment_counts.get(c.id, 0) %}{% if n %} · <a href="/works/{{ work.id }}/chapters/{{ c.number }}#comments">{{ n }} comment{{ "" if n == 1 else "s" }}<span class="visually-hidden"> on {{ c.title }}</span></a>{% endif %}</span>
+      </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+    <p class="muted">No chapters yet. They'll appear here as soon as the import finishes.</p>
+  {% endif %}
+</section>
+
+{% include "_comments.html" %}
+
+<section aria-labelledby="history-h">
+  <details class="history">
+    <summary><h2 id="history-h" class="section-title inline">History</h2> <span class="muted">· who imported and checked this work</span></summary>
+    {% set show_work = false %}
+    {% set caption = "Import and update history for this work" %}
+    {% include "_jobs_table.html" %}
+  </details>
+</section>
+
+<section class="meta-foot">
+  <p class="muted">Followers: {{ work.followers|map(attribute="user")|map(attribute="label")|join(", ") or "nobody yet" }}</p>
+</section>
+
+{% if can_manage %}
+<details class="danger">
+  <summary>Delete this work</summary>
+  <p>This removes the work and all {{ work.chapters|length }} chapters from the archive for everyone. It can't be undone.</p>
+  <form method="post" action="/works/{{ work.id }}/delete" data-confirm="Delete “{{ work.title }}” and all its chapters? This can't be undone.">
+    <button class="contrast">Delete work</button>
+  </form>
+</details>
+{% endif %}
+{% endblock %}
