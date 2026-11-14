@@ -95,6 +95,7 @@ data class WorkDetail(
     val status: String? = null,
     val rating: String? = null,
     val language: String? = null,
+    @SerialName("language_code") val languageCode: String? = null,
     @SerialName("word_count") val wordCount: Int? = null,
     val chapters: Int = 0,
     @SerialName("added_by") val addedBy: UserRef? = null,
@@ -126,6 +127,8 @@ data class ChapterContent(
     @SerialName("work_id") val workId: Int,
     @SerialName("work_title") val workTitle: String,
     @SerialName("work_chapters") val workChapters: Int = 0,
+    @SerialName("work_language") val workLanguage: String? = null,
+    @SerialName("work_language_code") val workLanguageCode: String? = null,
     @SerialName("source_url") val sourceUrl: String? = null,
     @SerialName("content_html") val contentHtml: String = "",
     @SerialName("prev_number") val prevNumber: Int? = null,
@@ -134,6 +137,31 @@ data class ChapterContent(
     @SerialName("imported_at") val importedAt: String? = null,
     @SerialName("imported_by") val importedBy: UserRef? = null,
     @SerialName("comment_count") val commentCount: Int = 0,
+)
+
+@Serializable
+data class TranslateLanguage(
+    val code: String,
+    val name: String,
+)
+
+@Serializable
+data class TranslateLanguagesResponse(
+    val source: String? = null,
+    val languages: List<TranslateLanguage> = emptyList(),
+)
+
+@Serializable
+data class TranslationStatus(
+    val status: String = "none",
+    val target: String? = null,
+    @SerialName("target_name") val targetName: String? = null,
+    val source: String? = null,
+    @SerialName("source_name") val sourceName: String? = null,
+    val title: String? = null,
+    @SerialName("content_html") val contentHtml: String? = null,
+    val progress: Int? = null,
+    val error: String? = null,
 )
 
 @Serializable

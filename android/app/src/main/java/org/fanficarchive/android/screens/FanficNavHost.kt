@@ -1,5 +1,6 @@
 package org.fanficarchive.android.screens
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -89,7 +90,10 @@ fun FanficNavHost(repository: ArchiveRepository) {
     val currentRoute = backStack?.destination?.route
     val showBottomBar = current.loggedIn && currentRoute in mainTabs.map { it.route }
 
+    // Child screens own status-bar / TopAppBar insets. Only consume the bottom nav here
+    // so we don't leave a blank strip under the system status bar.
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {

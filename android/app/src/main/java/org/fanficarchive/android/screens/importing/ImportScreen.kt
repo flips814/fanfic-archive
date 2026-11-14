@@ -10,7 +10,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,7 +29,9 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.ImportResponse
+import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.JobStatusPill
+import org.fanficarchive.android.screens.components.PrimaryButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,12 +89,12 @@ fun ImportScreen(
                     .fillMaxWidth()
                     .height(200.dp),
             )
-            Button(
+            PrimaryButton(
                 onClick = {
                     val urls = urlsText.lines().map { it.trim() }.filter { it.isNotEmpty() }
                     if (urls.isEmpty()) {
                         error = "Add at least one URL."
-                        return@Button
+                        return@PrimaryButton
                     }
                     scope.launch {
                         loading = true
@@ -108,7 +109,7 @@ fun ImportScreen(
                 enabled = !loading,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (loading) "Queuing…" else "Queue imports")
+                ButtonLabel(if (loading) "Queuing…" else "Queue imports")
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             result?.let { response ->

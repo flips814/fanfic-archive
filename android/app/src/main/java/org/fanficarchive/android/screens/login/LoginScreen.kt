@@ -16,13 +16,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -43,6 +41,9 @@ import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.ServerInfo
+import org.fanficarchive.android.screens.components.ButtonLabel
+import org.fanficarchive.android.screens.components.PrimaryButton
+import org.fanficarchive.android.screens.components.SecondaryButton
 
 @Composable
 fun LoginScreen(
@@ -111,17 +112,17 @@ fun LoginScreen(
             )
 
             if (oidcAvailable) {
-                Button(
+                PrimaryButton(
                     onClick = { error = null; browserMode = BrowserLoginMode.Sso },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Sign in with $providerName")
+                    ButtonLabel("Sign in with $providerName")
                 }
-                OutlinedButton(
+                SecondaryButton(
                     onClick = { error = null; browserMode = BrowserLoginMode.WebLogin },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Open website sign-in page")
+                    ButtonLabel("Open website sign-in page")
                 }
             }
 
@@ -145,7 +146,7 @@ fun LoginScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Button(
+                PrimaryButton(
                     onClick = {
                         scope.launch {
                             loading = true
@@ -159,7 +160,7 @@ fun LoginScreen(
                     enabled = username.isNotBlank() && password.isNotBlank() && !loading,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (loading) "Signing in…" else "Sign in")
+                    ButtonLabel(if (loading) "Signing in…" else "Sign in")
                 }
             } else if (!oidcAvailable) {
                 Text(
@@ -168,19 +169,19 @@ fun LoginScreen(
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                OutlinedButton(
+                SecondaryButton(
                     onClick = { error = null; browserMode = BrowserLoginMode.WebLogin },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Open website sign-in page")
+                    ButtonLabel("Open website sign-in page")
                 }
             }
 
             error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
-            OutlinedButton(onClick = onChangeServer, modifier = Modifier.fillMaxWidth()) {
-                Text("Change server")
+            SecondaryButton(onClick = onChangeServer, modifier = Modifier.fillMaxWidth()) {
+                ButtonLabel("Change server")
             }
         }
     }

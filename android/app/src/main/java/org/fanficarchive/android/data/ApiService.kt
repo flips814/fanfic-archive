@@ -2,6 +2,8 @@ package org.fanficarchive.android.data
 
 import retrofit2.http.Body
 import retrofit2.http.DELETE
+import retrofit2.http.Field
+import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -88,4 +90,36 @@ interface ApiService {
 
     @POST("api/settings")
     suspend fun updateSettings(@Body body: NotificationSettings): NotificationSettings
+
+    // Existing web translation endpoints (session cookie auth), same as the site UI.
+    @GET("translate/languages")
+    suspend fun translateLanguages(@Query("source") source: String? = null): TranslateLanguagesResponse
+
+    @GET("works/{id}/chapters/{number}/translation")
+    suspend fun getChapterTranslation(
+        @Path("id") id: Int,
+        @Path("number") number: Int,
+        @Query("to") to: String,
+    ): TranslationStatus
+
+    @FormUrlEncoded
+    @POST("works/{id}/chapters/{number}/translation")
+    suspend fun requestChapterTranslation(
+        @Path("id") id: Int,
+        @Path("number") number: Int,
+        @Field("to") to: String,
+    ): TranslationStatus
+
+    @GET("works/{id}/translation")
+    suspend fun getWorkTranslation(
+        @Path("id") id: Int,
+        @Query("to") to: String,
+    ): TranslationStatus
+
+    @FormUrlEncoded
+    @POST("works/{id}/translation")
+    suspend fun requestWorkTranslation(
+        @Path("id") id: Int,
+        @Field("to") to: String,
+    ): TranslationStatus
 }

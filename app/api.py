@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app import comments
+from app import comments, translate
 from app.auth import (
     authenticate_local,
     current_user,
@@ -90,6 +90,7 @@ def _work(
         "status": w.status,
         "rating": w.rating,
         "language": w.language if full else None,
+        "language_code": translate.lang_code(w.language) or None if full else None,
         "word_count": w.word_count,
         "chapters": len(w.chapters),
         "added_by": _user(w.added_by),
@@ -124,6 +125,7 @@ def _work(
         # drop full-only nulls for list payloads
         data.pop("author_url", None)
         data.pop("language", None)
+        data.pop("language_code", None)
         data.pop("published_at", None)
         data.pop("source_updated_at", None)
     return data
@@ -298,6 +300,8 @@ def get_chapter(
         "work_id": work.id,
         "work_title": work.title,
         "work_chapters": len(chapters),
+        "work_language": work.language,
+        "work_language_code": translate.lang_code(work.language) or None,
         "source_url": chapter.source_url,
         "content_html": chapter.content_html,
         "prev_number": chapters[index - 1].number if index > 0 else None,
