@@ -9,7 +9,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +24,7 @@ import kotlinx.coroutines.launch
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.ServerInfo
 import org.fanficarchive.android.screens.components.ButtonLabel
+import org.fanficarchive.android.screens.components.FanficTextField
 import org.fanficarchive.android.screens.components.PrimaryButton
 
 @Composable
@@ -55,12 +55,11 @@ fun SetupScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedTextField(
+            FanficTextField(
                 value = url,
                 onValueChange = { url = it; error = null },
-                label = { Text("Server URL") },
-                placeholder = { Text("https://fics.example.com") },
-                singleLine = true,
+                label = "Server URL",
+                placeholder = "https://fics.example.com",
                 modifier = Modifier.fillMaxWidth(),
             )
             androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {

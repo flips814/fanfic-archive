@@ -11,19 +11,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,9 +31,9 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.NotificationSettings
-import org.fanficarchive.android.data.ReaderPrefs
 import org.fanficarchive.android.data.ServerProfile
 import org.fanficarchive.android.screens.components.ButtonLabel
+import org.fanficarchive.android.screens.components.FanficTextField
 import org.fanficarchive.android.screens.components.PrimaryButton
 import org.fanficarchive.android.screens.components.SecondaryButton
 
@@ -50,12 +46,10 @@ fun SettingsScreen(
     onLoggedOut: () -> Unit,
     onDisconnected: () -> Unit,
 ) {
-    val readerPrefs by repository.readerPrefs.collectAsState(initial = ReaderPrefs())
     var notify by remember { mutableStateOf(NotificationSettings()) }
     var message by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    val themes = listOf("sepia", "light", "dark", "high", "site")
 
     LaunchedEffect(Unit) {
         runCatching { repository.getSettings() }
@@ -90,27 +84,11 @@ fun SettingsScreen(
                 Text("Signed in as ${profile.username}", style = MaterialTheme.typography.bodyMedium)
             }
 
-            Text("Reading", style = MaterialTheme.typography.titleLarge)
-            Text("Text size: ${"%.1f".format(readerPrefs.fontScale)}×")
-            Slider(
-                value = readerPrefs.fontScale,
-                onValueChange = { scale ->
-                    scope.launch { repository.saveReaderPrefs(scale, readerPrefs.theme) }
-                },
-                valueRange = 0.7f..2.0f,
+            Text(
+                "Reading settings (text size and page colour) are on each chapter.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text("Page color")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                themes.forEach { theme ->
-                    FilterChip(
-                        selected = readerPrefs.theme == theme,
-                        onClick = {
-                            scope.launch { repository.saveReaderPrefs(readerPrefs.fontScale, theme) }
-                        },
-                        label = { Text(theme.replaceFirstChar { it.uppercase() }) },
-                    )
-                }
-            }
 
             Text("Notifications", style = MaterialTheme.typography.titleLarge)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
@@ -120,26 +98,25 @@ fun SettingsScreen(
                     onCheckedChange = { notify = notify.copy(notifyEmail = it) },
                 )
             }
-            OutlinedTextField(
+            FanficTextField(
                 value = notify.notifyEmailAddress.orEmpty(),
                 onValueChange = { notify = notify.copy(notifyEmailAddress = it) },
-                label = { Text("Notification email") },
+                label = "Notification email",
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
             )
-            OutlinedTextField(
+            FanficTextField(
                 value = notify.discordWebhookUrl.orEmpty(),
                 onValueChange = { notify = notify.copy(discordWebhookUrl = it) },
-                label = { Text("Discord webhook URL") },
+                label = "Discord webhook URL",
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
             )
-            OutlinedTextField(
+            FanficTextField(
                 value = notify.appriseUrls.orEmpty(),
                 onValueChange = { notify = notify.copy(appriseUrls = it) },
-                label = { Text("Apprise URLs") },
-                modifier = Modifier.fillMaxWidth(),
+                label = "Apprise URLs",
+                singleLine = false,
                 minLines = 3,
+                modifier = Modifier.fillMaxWidth(),
             )
             PrimaryButton(
                 onClick = {

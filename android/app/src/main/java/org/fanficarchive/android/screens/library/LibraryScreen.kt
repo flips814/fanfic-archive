@@ -17,11 +17,9 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -40,6 +38,8 @@ import org.fanficarchive.android.data.WorkSummary
 import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.EmptyState
 import org.fanficarchive.android.screens.components.ErrorText
+import org.fanficarchive.android.screens.components.FanficTextField
+import org.fanficarchive.android.screens.components.FilterTag
 import org.fanficarchive.android.screens.components.LoadingBox
 import org.fanficarchive.android.screens.components.QuietButton
 import org.fanficarchive.android.screens.components.WorkCard
@@ -125,11 +125,11 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            OutlinedTextField(
+            FanficTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("Search title or author") },
-                singleLine = true,
+                label = "Search",
+                placeholder = "Title or author",
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -140,37 +140,36 @@ fun LibraryScreen(
             if (showFilters || activeFilters > 0) {
                 Column(
                     modifier = Modifier.padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
+                        FilterTag(
+                            label = "Following",
                             selected = followedOnly,
                             onClick = { followedOnly = !followedOnly },
-                            label = { Text("Following") },
                         )
-                        FilterChip(
+                        FilterTag(
+                            label = "Complete",
                             selected = status == "complete",
                             onClick = { status = if (status == "complete") "" else "complete" },
-                            label = { Text("Complete") },
                         )
-                        FilterChip(
+                        FilterTag(
+                            label = "In progress",
                             selected = status == "ongoing",
                             onClick = { status = if (status == "ongoing") "" else "ongoing" },
-                            label = { Text("In progress") },
                         )
                     }
                     if (sites.isNotEmpty()) {
                         var expanded by remember { mutableStateOf(false) }
                         ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-                            OutlinedTextField(
+                            FanficTextField(
                                 value = if (site.isBlank()) "All sites" else siteLabel(site),
                                 onValueChange = {},
                                 readOnly = true,
-                                label = { Text("Site") },
+                                label = "Site",
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                                modifier = Modifier
-                                    .menuAnchor()
-                                    .fillMaxWidth(),
+                                textFieldModifier = Modifier.menuAnchor(),
+                                modifier = Modifier.fillMaxWidth(),
                             )
                             ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                                 DropdownMenuItem(text = { Text("All sites") }, onClick = { site = ""; expanded = false })

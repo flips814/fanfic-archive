@@ -45,7 +45,7 @@ UI mirrors the website (Pico Violet): bottom nav for **Library**, **Add works**,
 - Activity log with kind/status filters
 - Users list with import stats
 - Work detail: follow, update check, auto-update, EPUB share, comments, delete, title/summary translation
-- Chapter reader with progress bar, page colors, and LibreTranslate (same server-side cache as the site)
+- Chapter reader: full-page scroll, collapsible Translate + Reading settings, LibreTranslate
 - Notification settings (email / Discord / Apprise)
 
 Not yet: site-login credentials, admin.

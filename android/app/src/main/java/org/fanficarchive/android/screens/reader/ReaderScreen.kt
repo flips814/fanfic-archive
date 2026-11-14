@@ -40,6 +40,7 @@ import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.ErrorText
 import org.fanficarchive.android.screens.components.HtmlPane
 import org.fanficarchive.android.screens.components.LoadingBox
+import org.fanficarchive.android.screens.components.ReadingSettingsPanel
 import org.fanficarchive.android.screens.components.SecondaryButton
 import org.fanficarchive.android.screens.components.TranslatePanel
 import org.fanficarchive.android.screens.components.TranslatedText
@@ -64,11 +65,13 @@ fun ReaderScreen(
     var translated by remember { mutableStateOf<TranslatedText?>(null) }
     val readerPrefs by repository.readerPrefs.collectAsState(initial = ReaderPrefs())
     val scope = rememberCoroutineScope()
+    val scroll = rememberScrollState()
 
     LaunchedEffect(workId, chapterNumber) {
         loading = true
         error = null
         translated = null
+        scroll.scrollTo(0)
         runCatching { repository.getChapter(workId, chapterNumber) }
             .onSuccess { chapter = it }
             .onFailure { error = repository.errorMessage(it) }
@@ -162,12 +165,15 @@ fun ReaderScreen(
                     val minutes = max(1, ceil((ch.wordCount ?: 0) / 230.0).toInt())
                     val displayTitle = translated?.title?.takeIf { it.isNotBlank() } ?: ch.title
                     val displayHtml = translated?.contentHtml?.takeIf { it.isNotBlank() } ?: ch.contentHtml
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scroll)
+                            .padding(bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
                         Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text(displayTitle, style = MaterialTheme.typography.headlineSmall)
@@ -197,13 +203,20 @@ fun ReaderScreen(
                                     }
                                 },
                             )
+                            ReadingSettingsPanel(
+                                prefs = readerPrefs,
+                                onChange = { scale, theme ->
+                                    scope.launch { repository.saveReaderPrefs(scale, theme) }
+                                },
+                            )
                         }
                         HtmlPane(
                             html = displayHtml,
                             baseUrl = baseUrl,
                             fontScale = readerPrefs.fontScale,
                             theme = readerPrefs.theme,
-                            modifier = Modifier.weight(1f),
+                            wrapContentHeight = true,
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 }

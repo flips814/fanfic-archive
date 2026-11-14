@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +32,7 @@ import org.fanficarchive.android.data.Job
 import org.fanficarchive.android.screens.components.EmptyState
 import org.fanficarchive.android.screens.components.ErrorText
 import org.fanficarchive.android.screens.components.FanficCard
+import org.fanficarchive.android.screens.components.FilterTag
 import org.fanficarchive.android.screens.components.JobStatusPill
 import org.fanficarchive.android.screens.components.LoadingBox
 import org.fanficarchive.android.screens.components.relativeTime
@@ -100,9 +100,9 @@ fun ActivityScreen(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                FilterChip(selected = kind == "", onClick = { kind = "" }, label = { Text("All") })
-                FilterChip(selected = kind == "import", onClick = { kind = "import" }, label = { Text("Imports") })
-                FilterChip(selected = kind == "update", onClick = { kind = "update" }, label = { Text("Updates") })
+                FilterTag(label = "All", selected = kind == "", onClick = { kind = "" })
+                FilterTag(label = "Imports", selected = kind == "import", onClick = { kind = "import" })
+                FilterTag(label = "Updates", selected = kind == "update", onClick = { kind = "update" })
             }
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -110,10 +110,10 @@ fun ActivityScreen(
             ) {
                 listOf("" to "Any", "done" to "Done", "failed" to "Failed", "running" to "Running", "queued" to "Queued")
                     .forEach { (value, label) ->
-                        FilterChip(
+                        FilterTag(
+                            label = label,
                             selected = status == value,
                             onClick = { status = value },
-                            label = { Text(label) },
                         )
                     }
             }
