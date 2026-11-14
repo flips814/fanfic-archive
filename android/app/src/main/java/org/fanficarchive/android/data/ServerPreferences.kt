@@ -24,6 +24,7 @@ data class ServerProfile(
 data class ReaderPrefs(
     val fontScale: Float = 1.1f,
     val theme: String = "sepia",
+    val translateTo: String = "",
 )
 
 class ServerPreferences(private val context: Context) {
@@ -34,6 +35,7 @@ class ServerPreferences(private val context: Context) {
     private val usernameKey = stringPreferencesKey("username")
     private val fontScaleKey = floatPreferencesKey("font_scale")
     private val readerThemeKey = stringPreferencesKey("reader_theme")
+    private val translateToKey = stringPreferencesKey("translate_to")
 
     val profile: Flow<ServerProfile> = context.dataStore.data.map { prefs ->
         ServerProfile(
@@ -49,6 +51,7 @@ class ServerPreferences(private val context: Context) {
         ReaderPrefs(
             fontScale = prefs[fontScaleKey] ?: 1.1f,
             theme = prefs[readerThemeKey] ?: "sepia",
+            translateTo = prefs[translateToKey].orEmpty(),
         )
     }
 
@@ -81,6 +84,13 @@ class ServerPreferences(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[fontScaleKey] = fontScale
             prefs[readerThemeKey] = theme
+        }
+    }
+
+    suspend fun saveTranslateTo(code: String?) {
+        context.dataStore.edit { prefs ->
+            if (code.isNullOrBlank()) prefs.remove(translateToKey)
+            else prefs[translateToKey] = code
         }
     }
 }

@@ -10,13 +10,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -39,6 +37,9 @@ import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.NotificationSettings
 import org.fanficarchive.android.data.ReaderPrefs
 import org.fanficarchive.android.data.ServerProfile
+import org.fanficarchive.android.screens.components.ButtonLabel
+import org.fanficarchive.android.screens.components.PrimaryButton
+import org.fanficarchive.android.screens.components.SecondaryButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -140,7 +141,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
             )
-            Button(
+            PrimaryButton(
                 onClick = {
                     scope.launch {
                         runCatching { repository.saveSettings(notify) }
@@ -153,12 +154,12 @@ fun SettingsScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Save notifications") }
+            ) { ButtonLabel("Save notifications") }
 
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
-            Button(
+            PrimaryButton(
                 onClick = {
                     scope.launch {
                         repository.logout()
@@ -166,8 +167,8 @@ fun SettingsScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Log out") }
-            OutlinedButton(
+            ) { ButtonLabel("Log out") }
+            SecondaryButton(
                 onClick = {
                     scope.launch {
                         repository.disconnect()
@@ -175,7 +176,7 @@ fun SettingsScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Disconnect server") }
+            ) { ButtonLabel("Disconnect server") }
         }
     }
 }

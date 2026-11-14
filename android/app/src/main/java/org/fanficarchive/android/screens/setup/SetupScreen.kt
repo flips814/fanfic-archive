@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -25,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.ServerInfo
+import org.fanficarchive.android.screens.components.ButtonLabel
+import org.fanficarchive.android.screens.components.PrimaryButton
 
 @Composable
 fun SetupScreen(
@@ -69,7 +70,7 @@ fun SetupScreen(
             error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
-            Button(
+            PrimaryButton(
                 onClick = {
                     scope.launch {
                         loading = true
@@ -83,7 +84,7 @@ fun SetupScreen(
                 enabled = url.isNotBlank() && !loading,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (loading) "Connecting…" else "Connect")
+                ButtonLabel(if (loading) "Connecting…" else "Connect")
             }
         }
     }

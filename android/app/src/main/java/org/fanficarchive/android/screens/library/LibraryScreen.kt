@@ -24,7 +24,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,9 +37,11 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.WorkSummary
+import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.EmptyState
 import org.fanficarchive.android.screens.components.ErrorText
 import org.fanficarchive.android.screens.components.LoadingBox
+import org.fanficarchive.android.screens.components.QuietButton
 import org.fanficarchive.android.screens.components.WorkCard
 import org.fanficarchive.android.screens.theme.siteLabel
 
@@ -133,7 +134,7 @@ fun LibraryScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 trailingIcon = {
-                    TextButton(onClick = { refresh() }) { Text("Search") }
+                    QuietButton(onClick = { refresh() }) { ButtonLabel("Search") }
                 },
             )
             if (showFilters || activeFilters > 0) {

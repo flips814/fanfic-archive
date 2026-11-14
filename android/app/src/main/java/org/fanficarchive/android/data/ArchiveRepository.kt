@@ -233,6 +233,46 @@ class ArchiveRepository(
         prefs.saveReaderPrefs(fontScale, theme)
     }
 
+    suspend fun saveTranslateTo(code: String?) {
+        prefs.saveTranslateTo(code)
+    }
+
+    suspend fun translateLanguages(sourceLanguageCode: String? = null): TranslateLanguagesResponse =
+        api().translateLanguages(sourceLanguageCode?.ifBlank { null })
+
+    suspend fun getChapterTranslation(workId: Int, number: Int, to: String): TranslationStatus =
+        api().getChapterTranslation(workId, number, to)
+
+    suspend fun requestChapterTranslation(workId: Int, number: Int, to: String): TranslationStatus =
+        api().requestChapterTranslation(workId, number, to)
+
+    suspend fun getWorkTranslation(workId: Int, to: String): TranslationStatus =
+        api().getWorkTranslation(workId, to)
+
+    suspend fun requestWorkTranslation(workId: Int, to: String): TranslationStatus =
+        api().requestWorkTranslation(workId, to)
+
+    /** Poll until a chapter translation finishes (or fails). Prefetches the next chapter like the site. */
+    suspend fun awaitChapterTranslation(
+        workId: Int,
+        number: Int,
+        to: String,
+        nextNumber: Int? = null,
+        onProgress: (TranslationStatus) -> Unit = {},
+    ): TranslationStatus {
+        var status = requestChapterTranslation(workId, number, to)
+        onProgress(status)
+        while (status.status == "running") {
+            kotlinx.coroutines.delay(1_200)
+            status = getChapterTranslation(workId, number, to)
+            onProgress(status)
+        }
+        if (status.status == "done" && nextNumber != null) {
+            runCatching { requestChapterTranslation(workId, nextNumber, to) }
+        }
+        return status
+    }
+
     fun errorMessage(error: Throwable): String = when (error) {
         is HttpException -> {
             val body = error.response()?.errorBody()?.string().orEmpty()

@@ -14,17 +14,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,14 +37,21 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.CommentItem
+import org.fanficarchive.android.data.ReaderPrefs
 import org.fanficarchive.android.data.WorkDetail
+import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.ErrorText
 import org.fanficarchive.android.screens.components.FollowingPill
 import org.fanficarchive.android.screens.components.HtmlPane
 import org.fanficarchive.android.screens.components.LoadingBox
+import org.fanficarchive.android.screens.components.PrimaryButton
+import org.fanficarchive.android.screens.components.SecondaryButton
 import org.fanficarchive.android.screens.components.SiteBadge
 import org.fanficarchive.android.screens.components.StatusPill
 import org.fanficarchive.android.screens.components.TagGroup
+import org.fanficarchive.android.screens.components.ToggleActionButton
+import org.fanficarchive.android.screens.components.TranslatePanel
+import org.fanficarchive.android.screens.components.TranslatedText
 import org.fanficarchive.android.screens.components.formatNumber
 import org.fanficarchive.android.screens.components.relativeTime
 import java.io.File
@@ -65,6 +72,9 @@ fun WorkDetailScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
+    var translationEnabled by remember { mutableStateOf(false) }
+    var translated by remember { mutableStateOf<TranslatedText?>(null) }
+    val readerPrefs by repository.readerPrefs.collectAsState(initial = ReaderPrefs())
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -84,7 +94,15 @@ fun WorkDetailScreen(
         }
     }
 
-    LaunchedEffect(workId) { load() }
+    LaunchedEffect(workId) {
+        translated = null
+        load()
+    }
+
+    LaunchedEffect(Unit) {
+        runCatching { repository.refreshInfo() }
+            .onSuccess { translationEnabled = it.features.translation }
+    }
 
     Scaffold(
         topBar = {
@@ -103,6 +121,8 @@ fun WorkDetailScreen(
             error != null && work == null -> ErrorText(error!!, Modifier.padding(padding))
             work != null -> {
                 val detail = work!!
+                val displayTitle = translated?.title?.takeIf { it.isNotBlank() } ?: detail.title
+                val displaySummary = translated?.contentHtml?.takeIf { it.isNotBlank() } ?: detail.summaryHtml
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -124,7 +144,7 @@ fun WorkDetailScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Text(detail.title, style = MaterialTheme.typography.headlineSmall)
+                    Text(displayTitle, style = MaterialTheme.typography.headlineSmall)
                     Text(
                         "by ${detail.author ?: "unknown author"}",
                         style = MaterialTheme.typography.bodyLarge,
@@ -145,12 +165,12 @@ fun WorkDetailScreen(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         val firstChapter = detail.chapterList.firstOrNull()?.number
-                        Button(
+                        PrimaryButton(
                             onClick = { firstChapter?.let(onOpenChapter) },
                             enabled = firstChapter != null,
                             modifier = Modifier.weight(1f),
-                        ) { Text("Start reading") }
-                        OutlinedButton(
+                        ) { ButtonLabel("Start reading") }
+                        SecondaryButton(
                             onClick = {
                                 scope.launch {
                                     runCatching { repository.downloadEpub(workId) }
@@ -173,10 +193,12 @@ fun WorkDetailScreen(
                                 }
                             },
                             modifier = Modifier.weight(1f),
-                        ) { Text("EPUB") }
+                            filled = true,
+                        ) { ButtonLabel("EPUB") }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ToggleActionButton(
+                            pressed = detail.isFollowing,
                             onClick = {
                                 scope.launch {
                                     runCatching { repository.setFollowing(workId, !detail.isFollowing) }
@@ -184,8 +206,8 @@ fun WorkDetailScreen(
                                         .onFailure { error = repository.errorMessage(it) }
                                 }
                             },
-                        ) { Text(if (detail.isFollowing) "Following" else "Follow") }
-                        OutlinedButton(
+                        ) { ButtonLabel(if (detail.isFollowing) "Following" else "Follow") }
+                        SecondaryButton(
                             onClick = {
                                 scope.launch {
                                     runCatching { repository.checkUpdates(workId) }
@@ -193,9 +215,9 @@ fun WorkDetailScreen(
                                         .onFailure { error = repository.errorMessage(it) }
                                 }
                             },
-                        ) { Text("Check updates") }
+                        ) { ButtonLabel("Check updates") }
                         if (detail.canManage) {
-                            OutlinedButton(
+                            SecondaryButton(
                                 onClick = {
                                     scope.launch {
                                         runCatching { repository.toggleAutoUpdate(workId) }
@@ -203,9 +225,21 @@ fun WorkDetailScreen(
                                             .onFailure { error = repository.errorMessage(it) }
                                     }
                                 },
-                            ) { Text(if (detail.autoUpdate) "Auto-update on" else "Auto-update off") }
+                            ) { ButtonLabel(if (detail.autoUpdate) "Auto-update on" else "Auto-update off") }
                         }
                     }
+                    TranslatePanel(
+                        repository = repository,
+                        enabled = translationEnabled,
+                        sourceLanguage = detail.languageCode,
+                        preferredCode = readerPrefs.translateTo,
+                        onPreferredChange = { code ->
+                            scope.launch { repository.saveTranslateTo(code) }
+                        },
+                        onTranslated = { translated = it },
+                        request = { to -> repository.requestWorkTranslation(workId, to) },
+                        poll = { to -> repository.getWorkTranslation(workId, to) },
+                    )
                     statusMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     TagGroup("Fandoms", detail.fandoms)
@@ -213,9 +247,9 @@ fun WorkDetailScreen(
                     TagGroup("Relationships", detail.relationships)
                     TagGroup("Characters", detail.characters)
                     TagGroup("Tags", detail.tags)
-                    if (!detail.summaryHtml.isNullOrBlank()) {
+                    if (!displaySummary.isNullOrBlank()) {
                         Text("Summary", style = MaterialTheme.typography.titleMedium)
-                        HtmlPane(html = detail.summaryHtml, baseUrl = baseUrl, fontScale = 1f, theme = "site")
+                        HtmlPane(html = displaySummary, baseUrl = baseUrl, fontScale = 1f, theme = "site")
                     }
                     Text("Chapters", style = MaterialTheme.typography.titleLarge)
                     detail.chapterList.forEach { chapter ->
@@ -245,14 +279,14 @@ fun WorkDetailScreen(
                             CommentBlock(reply, indented = true)
                         }
                     }
-                    androidx.compose.material3.OutlinedTextField(
+                    OutlinedTextField(
                         value = commentDraft,
                         onValueChange = { commentDraft = it },
                         label = { Text("Write a comment") },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
                     )
-                    Button(
+                    PrimaryButton(
                         onClick = {
                             scope.launch {
                                 runCatching { repository.postComment(workId, commentDraft) }
@@ -264,9 +298,9 @@ fun WorkDetailScreen(
                             }
                         },
                         enabled = commentDraft.isNotBlank(),
-                    ) { Text("Post comment") }
+                    ) { ButtonLabel("Post comment") }
                     if (detail.canManage) {
-                        OutlinedButton(
+                        SecondaryButton(
                             onClick = {
                                 scope.launch {
                                     runCatching { repository.deleteWork(workId) }
@@ -274,7 +308,7 @@ fun WorkDetailScreen(
                                         .onFailure { error = repository.errorMessage(it) }
                                 }
                             },
-                        ) { Text("Delete work") }
+                        ) { ButtonLabel("Delete work") }
                     }
                 }
             }
