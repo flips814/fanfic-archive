@@ -160,4 +160,147 @@
     window.addEventListener("resize", update);
     update();
   }
+
+  // ---- machine translation (LibreTranslate) --------------------------------------
+  // The chosen language is remembered, so the following chapters are translated too.
+  var tMenu = document.querySelector("[data-translate]");
+  var tStatus = document.querySelector("[data-translate-status]");
+  if (!tMenu || !tStatus) return;
+  var tSelect = tMenu.querySelector("[data-translate-to]");
+  var tGo = tMenu.querySelector("[data-translate-go]");
+  var tNote = tMenu.querySelector("[data-translate-note]");
+  var tUrl = tMenu.getAttribute("data-url");
+  var titleEl = reader.querySelector(".reader-head h1");
+  var bodyEl = reader.querySelector(".chapter-body");
+  var original = { title: titleEl.innerHTML, body: bodyEl.innerHTML, lang: reader.getAttribute("lang") };
+  var langNames = {}, langsLoaded = null, active = null, pollTimer = null;
+
+  function loadLanguages() {
+    if (langsLoaded) return langsLoaded;
+    var source = tMenu.getAttribute("data-source") || "";
+    langsLoaded = fetchJson("GET", "/translate/languages?source=" + encodeURIComponent(source)).then(function (data) {
+      var preferred = localStorage.getItem("translateTo");
+      var browser = (navigator.language || "").toLowerCase().split("-")[0];
+      tSelect.textContent = "";
+      data.languages.forEach(function (lang) {
+        langNames[lang.code] = lang.name;
+        var opt = document.createElement("option");
+        opt.value = lang.code;
+        opt.textContent = lang.name;
+        tSelect.appendChild(opt);
+      });
+      var pick = langNames[preferred] ? preferred
+        : data.languages.filter(function (l) { return l.code.toLowerCase().split("-")[0] === browser; }).map(function (l) { return l.code; })[0];
+      if (pick) tSelect.value = pick;
+      tSelect.disabled = tGo.disabled = !data.languages.length;
+      return data.languages;
+    }, function (err) {
+      tSelect.textContent = "";
+      tSelect.appendChild(new Option("Unavailable", ""));
+      tNote.textContent = err.message;
+      langsLoaded = null;
+      throw err;
+    });
+    return langsLoaded;
+  }
+
+  function fetchJson(method, url, form) {
+    var opts = { method: method, credentials: "same-origin", headers: { Accept: "application/json" } };
+    if (form) opts.body = new URLSearchParams(form);
+    return fetch(url, opts).then(function (resp) {
+      return resp.json().catch(function () { return {}; }).then(function (data) {
+        if (!resp.ok) throw new Error(data.detail || "The server answered with an error (" + resp.status + ").");
+        return data;
+      });
+    });
+  }
+
+  // Replaces the status line: a message, optional progress bar, optional buttons.
+  function showStatus(text, actions, progress) {
+    tStatus.textContent = "";
+    var msg = document.createElement("span");
+    msg.textContent = text;
+    tStatus.appendChild(msg);
+    if (progress != null) {
+      var bar = document.createElement("progress");
+      bar.max = 100;
+      if (progress > 0) bar.value = progress;
+      bar.setAttribute("aria-label", "Translation progress");
+      tStatus.appendChild(bar);
+    }
+    (actions || []).forEach(function (a) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "link";
+      btn.textContent = a.label;
+      btn.addEventListener("click", a.run);
+      tStatus.appendChild(btn);
+    });
+    tStatus.hidden = false;
+  }
+
+  function stopAction() { return { label: "Show original", run: function () { showOriginal(true); } }; }
+
+  function translateTo(code) {
+    clearTimeout(pollTimer);
+    active = code;
+    localStorage.setItem("translateTo", code);
+    showStatus("Translating into " + (langNames[code] || code) + "…", [stopAction()], 0);
+    fetchJson("POST", tUrl, { to: code }).then(function (data) { handle(code, data); }, failed(code));
+  }
+
+  function handle(code, data) {
+    if (active !== code) return;
+    if (data.status === "done") return showTranslation(code, data);
+    if (data.status === "none") return translateTo(code);
+    if (data.status === "failed") return failed(code)(new Error(data.error || "Translation failed."));
+    var bar = tStatus.querySelector("progress");
+    if (bar && data.progress > 0) bar.value = data.progress;
+    pollTimer = setTimeout(function () {
+      fetchJson("GET", tUrl + "?to=" + encodeURIComponent(code)).then(function (d) { handle(code, d); }, failed(code));
+    }, 2000);
+  }
+
+  function failed(code) {
+    return function (err) {
+      if (active !== code) return;
+      showStatus(err.message, [{ label: "Try again", run: function () { translateTo(code); } }, stopAction()]);
+    };
+  }
+
+  function showTranslation(code, data) {
+    titleEl.textContent = data.title || titleEl.textContent;
+    bodyEl.innerHTML = data.content_html;
+    reader.setAttribute("lang", code);
+    showStatus("Machine-translated from " + (data.source_name || "the original") + " into " + (data.target_name || code) +
+      ". It may get names, slang and tone wrong.", [stopAction()]);
+    // Get the next chapter ready while this one is being read.
+    var next = document.querySelector('[data-nav="next"]');
+    if (next) fetchJson("POST", next.pathname + "/translation", { to: code }).catch(function () {});
+  }
+
+  function showOriginal(moveFocus) {
+    clearTimeout(pollTimer);
+    active = null;
+    localStorage.removeItem("translateTo");
+    titleEl.innerHTML = original.title;
+    bodyEl.innerHTML = original.body;
+    if (original.lang) reader.setAttribute("lang", original.lang); else reader.removeAttribute("lang");
+    tStatus.hidden = true;
+    tStatus.textContent = "";
+    if (moveFocus) tMenu.querySelector("summary").focus();
+  }
+
+  tMenu.addEventListener("toggle", function () { if (tMenu.open) loadLanguages().catch(function () {}); });
+  tGo.addEventListener("click", function () {
+    if (!tSelect.value) return;
+    tMenu.removeAttribute("open");
+    translateTo(tSelect.value);
+  });
+  if (localStorage.getItem("translateTo")) {
+    loadLanguages().then(function () {
+      var code = localStorage.getItem("translateTo");
+      if (langNames[code]) translateTo(code);  // not offered when the work is already in that language
+    }, function () {});
+  }
 })();

@@ -7,6 +7,7 @@
 #   Mailpit        http://localhost:8025   (every email the app sends)
 #   ntfy           http://localhost:8090/fanfic-all   (server-wide push notifications)
 #   FlareSolverr   part of the main stack (see docker-compose.yml)
+#   LibreTranslate part of the main stack; only English, Spanish, French and Portuguese here, to download quickly
 #
 # Automated tests:
 #   wsl docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
@@ -62,6 +63,10 @@ services:
     restart: unless-stopped
     ports:
       - "8025:8025"
+
+  libretranslate:
+    environment:
+      LT_LOAD_ONLY: en,es,fr,pt
 
   ntfy:
     image: binwiederhier/ntfy:latest

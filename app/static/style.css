@@ -397,6 +397,18 @@ code { font-size: max(.875em, 13px); overflow-wrap: anywhere; }
 .stepper output { min-width: 3.5rem; text-align: center; font-weight: 700; }
 .reader-panel .reset { margin: 0; }
 .reader-panel p { margin: 0; }
+.reader-tools { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+.translate-status {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem;
+  max-width: var(--reader-width); margin: 0 auto 1.5rem; padding: .6rem .9rem; font-size: .9rem;
+  border-left: 4px solid var(--pico-primary); border-radius: .5rem;
+  background: color-mix(in srgb, var(--reader-fg) 6%, transparent);
+}
+.translate-status[hidden] { display: none; }
+.translate-status > span { flex: 1 1 16rem; }
+.translate-status progress { flex: 0 1 8rem; margin: 0; }
+.translate-status button.link { margin: 0; }
 
 .reader {
   --reader-size: 1.15rem;

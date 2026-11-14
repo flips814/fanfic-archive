@@ -128,6 +128,33 @@ class Chapter(Base):
 
     work: Mapped[Work] = relationship(back_populates="chapters")
     imported_by: Mapped[User | None] = relationship()
+    translations: Mapped[list["ChapterTranslation"]] = relationship(
+        back_populates="chapter", cascade="all, delete-orphan"
+    )
+
+
+class ChapterTranslation(Base):
+    """A machine translation of one chapter, shared by every reader who asks for that language."""
+
+    __tablename__ = "chapter_translations"
+    __table_args__ = (UniqueConstraint("chapter_id", "target_lang"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id", ondelete="CASCADE"), index=True)
+    target_lang: Mapped[str] = mapped_column(String(20))
+    source_lang: Mapped[str | None] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20), default="running")  # running | done | failed
+    progress: Mapped[int] = mapped_column(Integer, default=0)  # percent
+    error: Mapped[str | None] = mapped_column(Text)
+    title: Mapped[str | None] = mapped_column(String(1000))
+    content_html: Mapped[str | None] = mapped_column(Text)
+    # sha256 of the chapter text it was made from; a re-imported chapter gets translated again
+    content_hash: Mapped[str] = mapped_column(String(64))
+    requested_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    chapter: Mapped[Chapter] = relationship(back_populates="translations")
 
 
 class Comment(Base):

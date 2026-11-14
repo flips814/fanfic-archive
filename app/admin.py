@@ -8,7 +8,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app import notify, settings_store
+from app import notify, settings_store, translate
 from app.auth import configure_oauth, require_admin
 from app.config import FIELDS, SECTIONS, settings
 from app.db import get_db
@@ -139,6 +139,9 @@ def _checklist(db: Session) -> list[dict]:
         dict(ok=bool(settings.flaresolverr_url), warn=not settings.flaresolverr_url, title="FanFiction.net (FlareSolverr)",
              detail=settings.flaresolverr_url or "Not set; FanFiction.net imports will likely be blocked by Cloudflare.",
              href="/admin/settings/importers"),
+        dict(ok=bool(settings.translate_url), warn=not settings.translate_url, title="Translation (LibreTranslate)",
+             detail=settings.translate_url or "Off; readers can't translate chapters (optional).",
+             href="/admin/settings/translation"),
     ]
 
 
@@ -202,7 +205,8 @@ async def admin_settings_save(request: Request, section: str, db: Session = Depe
 
 @router.post("/admin/test/{what}")
 async def admin_test(request: Request, what: str, db: Session = Depends(get_db), user: User = Depends(require_admin)):
-    section = {"oidc": "signin", "email": "email", "notify": "notifications", "flaresolverr": "importers"}.get(what)
+    section = {"oidc": "signin", "email": "email", "notify": "notifications", "flaresolverr": "importers",
+               "translate": "translation"}.get(what)
     if section is None:
         raise HTTPException(404)
     form = await request.form()
@@ -249,6 +253,18 @@ def _run_test(what: str, user: User) -> str:
             raise ValueError("add a Discord webhook or an Apprise URL first.")
         notify.notify_global(f"{settings.site_name}: test", "Server-wide notifications are working.")
         return "Test notification sent to the server-wide channels."
+    if what == "translate":
+        if not settings.translate_url:
+            raise ValueError("enter the LibreTranslate URL first.")
+        translate._languages_cache["data"] = []
+        langs = translate.languages()
+        sample = ""
+        en = translate.find_language("en", langs)
+        targets = [code for code in (en["targets"] if en else []) if code != en["code"]]
+        if targets and (target := translate.find_language(targets[0], langs)):
+            sample = f" “Hello, how are you?” in {target['name']}: “{translate.translate_text('Hello, how are you?', en['code'], target['code'])}”."
+        names = ", ".join(lang["name"] for lang in langs[:12]) + (f" and {len(langs) - 12} more" if len(langs) > 12 else "")
+        return f"LibreTranslate is working with {len(langs)} languages: {names}.{sample}"
     if not settings.flaresolverr_url:
         raise ValueError("enter the FlareSolverr URL first.")
     msg = requests.get(settings.flaresolverr_url, timeout=10).json().get("msg", "")

@@ -16,6 +16,8 @@ os.environ.update(
     SMTP_HOST="",
     UPDATE_INTERVAL_MINUTES="60",
     COMPLETED_UPDATE_INTERVAL_MINUTES="1440",
+    TRANSLATE_URL="",
+    TRANSLATE_API_KEY="",
 )
 
 import pytest  # noqa: E402

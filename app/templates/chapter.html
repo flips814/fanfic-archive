@@ -7,55 +7,74 @@
 <div class="reader-top">
   <a href="/works/{{ work.id }}" class="back-link">{{ icon("list") }} {{ work.title }}</a>
 
-  <details class="reader-settings">
-    <summary role="button" class="secondary outline">{{ icon("settings") }} Reading settings</summary>
-    <div class="reader-panel" role="group" aria-label="Reading settings">
-      <div class="setting">
-        <span class="setting-label" id="size-label">Text size</span>
-        <div class="stepper" role="group" aria-labelledby="size-label">
-          <button type="button" class="secondary outline" data-reader-size="-1" aria-label="Smaller text">A−</button>
-          <output id="size-value" aria-live="polite">100%</output>
-          <button type="button" class="secondary outline" data-reader-size="1" aria-label="Larger text">A+</button>
+  <div class="reader-tools">
+    {% if settings.translate_url %}
+    <details class="reader-settings" data-translate
+             data-url="/works/{{ work.id }}/chapters/{{ chapter.number }}/translation"
+             data-source="{{ work.language|lang_code }}">
+      <summary role="button" class="secondary outline">{{ icon("globe") }} Translate</summary>
+      <div class="reader-panel" role="group" aria-label="Translate this chapter">
+        <label class="setting">Translate into
+          <select data-translate-to disabled><option value="">Loading languages…</option></select>
+        </label>
+        <div class="reader-panel-buttons">
+          <button type="button" data-translate-go disabled>Translate</button>
         </div>
+        <p class="muted small" data-translate-note>Machine translation by LibreTranslate on this archive's own server. Later chapters are translated too until you choose “Show original”.</p>
       </div>
-      <label class="setting">Font
-        <select data-reader-pref="font">
-          <option value="serif">Literata (serif)</option>
-          <option value="sans">Atkinson Hyperlegible (sans)</option>
-          <option value="dyslexic">OpenDyslexic</option>
-          <option value="system">System font</option>
-        </select>
-      </label>
-      <label class="setting">Line spacing
-        <select data-reader-pref="spacing">
-          <option value="normal">Normal</option>
-          <option value="relaxed">Relaxed</option>
-          <option value="loose">Extra loose</option>
-        </select>
-      </label>
-      <label class="setting">Line width
-        <select data-reader-pref="width">
-          <option value="narrow">Narrow</option>
-          <option value="medium">Medium</option>
-          <option value="wide">Wide</option>
-        </select>
-      </label>
-      <label class="setting">Page colour
-        <select data-reader-pref="paper">
-          <option value="default">Site theme</option>
-          <option value="light">Light</option>
-          <option value="sepia">Sepia</option>
-          <option value="dark">Dark</option>
-          <option value="contrast">High contrast</option>
-        </select>
-      </label>
-      <div class="reader-panel-buttons">
-        <button type="button" class="secondary outline reset" data-reader-reset aria-label="Reset reading settings to defaults">Reset</button>
-        <button type="button" data-close-details>Done</button>
+    </details>
+    {% endif %}
+
+    <details class="reader-settings">
+      <summary role="button" class="secondary outline">{{ icon("settings") }} Reading settings</summary>
+      <div class="reader-panel" role="group" aria-label="Reading settings">
+        <div class="setting">
+          <span class="setting-label" id="size-label">Text size</span>
+          <div class="stepper" role="group" aria-labelledby="size-label">
+            <button type="button" class="secondary outline" data-reader-size="-1" aria-label="Smaller text">A−</button>
+            <output id="size-value" aria-live="polite">100%</output>
+            <button type="button" class="secondary outline" data-reader-size="1" aria-label="Larger text">A+</button>
+          </div>
+        </div>
+        <label class="setting">Font
+          <select data-reader-pref="font">
+            <option value="serif">Literata (serif)</option>
+            <option value="sans">Atkinson Hyperlegible (sans)</option>
+            <option value="dyslexic">OpenDyslexic</option>
+            <option value="system">System font</option>
+          </select>
+        </label>
+        <label class="setting">Line spacing
+          <select data-reader-pref="spacing">
+            <option value="normal">Normal</option>
+            <option value="relaxed">Relaxed</option>
+            <option value="loose">Extra loose</option>
+          </select>
+        </label>
+        <label class="setting">Line width
+          <select data-reader-pref="width">
+            <option value="narrow">Narrow</option>
+            <option value="medium">Medium</option>
+            <option value="wide">Wide</option>
+          </select>
+        </label>
+        <label class="setting">Page colour
+          <select data-reader-pref="paper">
+            <option value="default">Site theme</option>
+            <option value="light">Light</option>
+            <option value="sepia">Sepia</option>
+            <option value="dark">Dark</option>
+            <option value="contrast">High contrast</option>
+          </select>
+        </label>
+        <div class="reader-panel-buttons">
+          <button type="button" class="secondary outline reset" data-reader-reset aria-label="Reset reading settings to defaults">Reset</button>
+          <button type="button" data-close-details>Done</button>
+        </div>
+        <p class="muted small">Saved in this browser. On a keyboard, ← and → change chapters.</p>
       </div>
-      <p class="muted small">Saved in this browser. On a keyboard, ← and → change chapters.</p>
-    </div>
-  </details>
+    </details>
+  </div>
 </div>
 
 <article class="reader" data-reader {% if work.language|lang_code %}lang="{{ work.language|lang_code }}"{% endif %}>
@@ -69,6 +88,7 @@
       · <a href="#comments">{{ comment_count }} comment{{ "" if comment_count == 1 else "s" }}</a>
     </p>
   </header>
+  {% if settings.translate_url %}<div class="translate-status" data-translate-status role="status" aria-live="polite" hidden></div>{% endif %}
   <div class="chapter-body">{{ chapter.content_html|safe }}</div>
 </article>
 

@@ -1,6 +1,6 @@
 <nav class="admin-nav" aria-label="Admin sections">
   <ul>
-    {% for key, label in [("overview", "Overview"), ("users", "Users"), ("general", "General"), ("signin", "Sign-in"), ("email", "Email"), ("notifications", "Notifications"), ("updates", "Update checks"), ("importers", "Importers")] %}
+    {% for key, label in [("overview", "Overview"), ("users", "Users"), ("general", "General"), ("signin", "Sign-in"), ("email", "Email"), ("notifications", "Notifications"), ("updates", "Update checks"), ("importers", "Importers"), ("translation", "Translation")] %}
       {% set href = "/admin" if key == "overview" else ("/admin/users" if key == "users" else "/admin/settings/" ~ key) %}
       <li><a href="{{ href }}" {% if admin_section == key %}aria-current="page"{% endif %}>{{ label }}</a></li>
     {% endfor %}

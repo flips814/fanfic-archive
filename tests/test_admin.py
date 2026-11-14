@@ -121,7 +121,7 @@ def test_admin_pages_are_admin_only():
     admin = login("boss")
     for path in ["/admin", "/admin/users", "/admin/settings/general", "/admin/settings/signin",
                  "/admin/settings/email", "/admin/settings/notifications", "/admin/settings/updates",
-                 "/admin/settings/importers"]:
+                 "/admin/settings/importers", "/admin/settings/translation"]:
         assert admin.get(path).status_code == 200, path
 
 

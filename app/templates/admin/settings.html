@@ -72,6 +72,7 @@
     {% if section == "email" %}<button type="submit" formaction="/admin/test/email" class="secondary outline">Send me a test email</button>{% endif %}
     {% if section == "notifications" %}<button type="submit" formaction="/admin/test/notify" class="secondary outline">Send a test notification</button>{% endif %}
     {% if section == "importers" %}<button type="submit" formaction="/admin/test/flaresolverr" class="secondary outline">Test FlareSolverr</button>{% endif %}
+    {% if section == "translation" %}<button type="submit" formaction="/admin/test/translate" class="secondary outline">Test translation</button>{% endif %}
     {% if fields|selectattr("key", "in", overridden)|list %}
       <button type="submit" name="reset" value="1" class="secondary outline"
               formnovalidate>Reset to environment values</button>

@@ -8,6 +8,7 @@ A self-hosted, multi-user fanfiction library that runs in Docker.
 - **OIDC login** (Authentik, Authelia, Keycloak, Zitadel, Pocket ID, Google, ...), so every import is tied to a real user.
 - **Who imported what**: works and chapters record the user who imported them; the Activity page is a full audit log of every import and update check; the Users page shows per-user totals.
 - Read in the browser or **download EPUB**. Small JSON API under `/api`.
+- **Translate** any chapter in the reader, using a bundled [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate) server (open source, runs on your machine, no text leaves your server).
 
 ## Quick start
 
@@ -16,11 +17,11 @@ No configuration is needed to start:
 ```bash
 git clone https://github.com/flips814/fanfic-archive.git && cd fanfic-archive
 docker compose up -d --build
-docker compose ps                                        # db, web, worker, flaresolverr: all "healthy"
+docker compose ps                                        # db, web, worker, flaresolverr, libretranslate: all "healthy"
 docker compose logs web | grep -A2 "First-time setup"   # copy the setup code
 ```
 
-The stack is four containers under the `fanfic-archive` project: **db** (PostgreSQL, data in the `pgdata` volume), **web** (the site), **worker** (imports and update checks) and **flaresolverr** (gets past Cloudflare for FanFiction.net). Each has a health check, restarts automatically, and keeps at most 30 MB of logs.
+The stack is five containers under the `fanfic-archive` project: **db** (PostgreSQL, data in the `pgdata` volume), **web** (the site), **worker** (imports and update checks), **flaresolverr** (gets past Cloudflare for FanFiction.net) and **libretranslate** (machine translation for the reader). Each has a health check, restarts automatically, and keeps at most 30 MB of logs.
 
 Open `http://localhost:8000/setup`, enter the setup code, name your archive, and create the admin account. You'll land in the **Admin** panel, which has a setup checklist and every setting:
 
@@ -34,6 +35,7 @@ Open `http://localhost:8000/setup`, enter the setup code, name your archive, and
 | Notifications | Server-wide Discord webhook and Apprise URLs, with a test button |
 | Update checks | How often works are checked, politeness delay |
 | Importers | 18+ checks, FlareSolverr (with a test button), extra FanFicFare INI settings |
+| Translation | LibreTranslate server and API key, with a "Test translation" button |
 
 Changes apply immediately; the worker picks them up within a minute. Settings saved in the UI override `.env`, and each section has "Reset to environment values". Secrets (client secret, SMTP password, webhook) are stored encrypted.
 
@@ -72,6 +74,18 @@ To try the app without an IdP, set `DEV_LOGIN=true` and visit `/dev-login?as=ali
 | Wattpad | Works out of the box. |
 | Tumblr | No account or API key needed (uses Tumblr's legacy v1 read API, which Tumblr could retire without notice; blogs visible only to logged-in users can't be read). Paste a single post URL (one-chapter work) or a blog tag page like `https://BLOG.tumblr.com/tagged/my-fic` (every post under that tag becomes a chapter, oldest first, and new posts become new chapters). |
 | Others | Anything [FanFicFare supports](https://github.com/JimmXinu/FanFicFare/wiki/SupportedSites). |
+
+### Translation
+
+Every chapter has a **Translate** button next to *Reading settings*. Pick a language and the chapter (title and text, formatting kept) is translated by the bundled [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate) container, an open-source (AGPL) translation server built on [Argos Translate](https://github.com/argosopentech/argos-translate) models. Nothing is sent to an outside service.
+
+- The chosen language sticks: following chapters open already translated, and the next chapter is translated in the background while you read. **Show original** switches back and turns it off.
+- Each chapter is translated once per language and stored in the database, so the next reader who asks gets it instantly. A chapter that changes at the source is translated again.
+- The source language comes from the work's metadata, or is detected when the site doesn't say.
+- Speed depends on your CPU: roughly 1,000 words every 15–20 seconds. The reader shows progress while it works.
+- `TRANSLATE_LANGUAGES` in `.env` picks which languages the container downloads and offers (default: `en,es,fr,de,it,pt,ru,zh,ja,ko,pl,nl,id,tr,uk,vi`; English is always needed, as other pairs go through it). Each language costs a few hundred MB of disk and memory. The **first start downloads the models**, which takes several minutes; they're kept in the `translate-models` volume. Run `docker compose up -d` again after changing the list.
+- To use another LibreTranslate server (e.g. libretranslate.com), set its URL and API key under **Admin → Translation**. To turn translation off, clear the URL there, or set `TRANSLATE_URL=` (empty) in `.env`; you can then also remove the `libretranslate` service from `docker-compose.yml`.
+- Machine translation gets names, slang and tone wrong at times; the reader says so above every translated chapter.
 
 ## How updates work
 
@@ -118,6 +132,8 @@ Then start the test stack. It includes a fake SSO provider, Mailpit to catch ema
 | Mailpit | http://localhost:8025 | Every email the app sends |
 | ntfy | http://localhost:8090/fanfic-all | Server-wide notifications. Users can add `ntfy://ntfy/<topic>` in their settings and watch `http://localhost:8090/<topic>`. |
 
+The test stack's LibreTranslate only downloads English, Spanish, French and Portuguese, so it's ready within a few minutes.
+
 WSL normally shuts Ubuntu (and Docker) down when no `wsl` command is running. `up` therefore starts a per-user scheduled task, `FanficArchive-WSL-KeepAlive` (no admin needed), which keeps it running; `down`/`reset` stop that task.
 
 The test stack checks for updates every 5 minutes. To simulate an author posting a new chapter, delete a work's last chapter, then click **Check for updates now**:
@@ -137,7 +153,7 @@ python -m app.worker               # terminal 2
 
 ## Backups
 
-All data lives in the `pgdata` volume:
+All data, including stored translations, lives in the `pgdata` volume (the `translate-models` volume only holds downloadable models):
 
 ```bash
 docker compose exec db pg_dump -U fanfic fanfic | gzip > fanfic-$(date +%F).sql.gz

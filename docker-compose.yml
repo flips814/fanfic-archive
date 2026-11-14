@@ -3,6 +3,7 @@
 #   web           the website on http://localhost:${WEB_PORT:-8000}
 #   worker        imports works and checks for new chapters in the background
 #   flaresolverr  gets past Cloudflare on FanFiction.net / FictionPress
+#   libretranslate  open-source machine translation for the reader's "Translate" button
 name: fanfic-archive
 
 x-logging: &logging
@@ -24,6 +25,8 @@ x-app: &app
     FANFICFARE_PERSONAL_INI: /config/personal.ini
     # Set FLARESOLVERR_URL= (empty) in .env to stop using FlareSolverr.
     FLARESOLVERR_URL: ${FLARESOLVERR_URL-http://flaresolverr:8191}
+    # Set TRANSLATE_URL= (empty) in .env to turn translation off.
+    TRANSLATE_URL: ${TRANSLATE_URL-http://libretranslate:5000}
   volumes:
     - ./config:/config:ro
   depends_on:
@@ -83,5 +86,26 @@ services:
       start_period: 60s
       retries: 3
 
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      # Languages to download and offer (English is always needed). Each one costs disk space and
+      # memory; the first start downloads them, which can take several minutes.
+      LT_LOAD_ONLY: ${TRANSLATE_LANGUAGES:-en,es,fr,de,it,pt,ru,zh,ja,ko,pl,nl,id,tr,uk,vi}
+      # Download languages added to the list above on the next start (skipped when offline).
+      LT_UPDATE_MODELS: "true"
+      LT_DISABLE_WEB_UI: "true"
+    volumes:
+      - translate-models:/home/libretranslate/.local
+    healthcheck:
+      test: ["CMD", "./venv/bin/python", "scripts/healthcheck.py"]
+      interval: 60s
+      timeout: 10s
+      start_period: 15m
+      retries: 3
+
 volumes:
   pgdata:
+  translate-models:

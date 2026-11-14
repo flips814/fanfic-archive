@@ -64,6 +64,11 @@ class Settings:
     )
     flaresolverr_timeout_ms: int = _int("FLARESOLVERR_TIMEOUT_MS", 59000)
 
+    # translation
+    translate_url: str = os.getenv("TRANSLATE_URL", "").rstrip("/")
+    translate_api_key: str = os.getenv("TRANSLATE_API_KEY", "")
+    translate_timeout_seconds: int = _int("TRANSLATE_TIMEOUT_SECONDS", 120)
+
     # notifications
     apprise_urls: list[str] = field(default_factory=lambda: _list("APPRISE_URLS"))
     discord_webhook_url: str = os.getenv("DISCORD_WEBHOOK_URL", "")
@@ -98,6 +103,7 @@ class Settings:
             setattr(self, f.key, copy.deepcopy(value))
         self.base_url = self.base_url.rstrip("/")
         self.oidc_issuer = self.oidc_issuer.rstrip("/")
+        self.translate_url = self.translate_url.rstrip("/")
         self.admin_emails = [e.lower() for e in self.admin_emails]
 
 
@@ -119,6 +125,7 @@ SECTIONS = {
     "notifications": ("Server-wide notifications", "Channels that hear about every new work and every new chapter, e.g. a shared Discord channel."),
     "updates": ("Update checks", "How often works are re-checked for new chapters."),
     "importers": ("Importers", "Settings for downloading from fanfic sites."),
+    "translation": ("Translation", "Let readers translate any chapter with LibreTranslate, an open-source translation server."),
 }
 
 FIELDS: list[Field] = [
@@ -173,6 +180,14 @@ FIELDS: list[Field] = [
     Field("fanficfare_ini", "Extra FanFicFare settings (personal.ini)", "importers", "text",
           "Advanced: any FanFicFare INI options, e.g. a server-wide fallback login under [archiveofourown.org].",
           "[defaults]\nslow_down_sleep_time:2", advanced=True),
+
+    Field("translate_url", "LibreTranslate URL", "translation", "url",
+          "Usually http://libretranslate:5000 with the bundled container. Leave empty to turn translation off.",
+          "http://libretranslate:5000"),
+    Field("translate_api_key", "API key", "translation", "secret",
+          "Only needed for a LibreTranslate server that requires keys, such as libretranslate.com."),
+    Field("translate_timeout_seconds", "Timeout per request (seconds)", "translation", "int", placeholder="120",
+          advanced=True),
 ]
 FIELD_MAP = {f.key: f for f in FIELDS}
 

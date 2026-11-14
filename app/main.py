@@ -12,7 +12,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import admin, api, auth, comments, notify, settings_store
+from app import admin, api, auth, comments, notify, settings_store, translate
 from app.auth import NotAuthenticated, current_user, current_user_optional
 from app.config import settings
 from app.db import SessionLocal, get_db, init_db
@@ -92,17 +92,9 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(api.router)
+app.include_router(translate.router)
 
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
-
-# FanFicFare reports language names; the reader needs BCP 47 codes for screen readers / hyphenation.
-_LANG_CODES = {
-    "english": "en", "spanish": "es", "español": "es", "french": "fr", "français": "fr", "german": "de",
-    "deutsch": "de", "portuguese": "pt", "português": "pt", "italian": "it", "italiano": "it",
-    "russian": "ru", "русский": "ru", "chinese": "zh", "中文": "zh", "japanese": "ja", "日本語": "ja",
-    "korean": "ko", "polish": "pl", "polski": "pl", "dutch": "nl", "indonesian": "id",
-    "bahasa indonesia": "id", "turkish": "tr", "vietnamese": "vi", "tagalog": "tl", "filipino": "fil",
-}
 
 
 def _aware(value: datetime) -> datetime:
@@ -137,13 +129,6 @@ def _fmt_num(value: int | None) -> str:
     return f"{value:,}" if value else "—"
 
 
-def _lang_code(language: str | None) -> str:
-    if not language:
-        return ""
-    language = language.strip().lower()
-    return _LANG_CODES.get(language, language if len(language) in (2, 3) else "")
-
-
 def _is_new_chapter(chapter: Chapter, work: Work, days: int = 7) -> bool:
     """Arrived after the initial import, within the last ``days`` days."""
     imported, created = _aware(chapter.imported_at), _aware(work.created_at)
@@ -153,7 +138,7 @@ def _is_new_chapter(chapter: Chapter, work: Work, days: int = 7) -> bool:
 
 
 templates.env.filters.update(
-    dt=_fmt_dt, iso=_fmt_iso, ago=_fmt_ago, num=_fmt_num, lang_code=_lang_code, comment_body=comments.render_body
+    dt=_fmt_dt, iso=_fmt_iso, ago=_fmt_ago, num=_fmt_num, lang_code=translate.lang_code, comment_body=comments.render_body
 )
 templates.env.globals.update(
     settings=settings,
