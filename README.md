@@ -77,9 +77,9 @@ To try the app without an IdP, set `DEV_LOGIN=true` and visit `/dev-login?as=ali
 
 ### Translation
 
-Every chapter has a **Translate** button next to *Reading settings*. Pick a language and the chapter (title and text, formatting kept) is translated by the bundled [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate) container, an open-source (AGPL) translation server built on [Argos Translate](https://github.com/argosopentech/argos-translate) models. Nothing is sent to an outside service.
+Every chapter has a **Translate** button next to *Reading settings*, and every story page has one for the story's title and summary. Pick a language and the text (formatting kept) is translated by the bundled [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate) container, an open-source (AGPL) translation server built on [Argos Translate](https://github.com/argosopentech/argos-translate) models. Nothing is sent to an outside service.
 
-- The chosen language sticks: following chapters open already translated, and the next chapter is translated in the background while you read. **Show original** switches back and turns it off.
+- The chosen language sticks: story pages and chapters you open next are already translated, and the next chapter is translated in the background while you read. **Show original** switches back and turns it off.
 - Each chapter is translated once per language and stored in the database, so the next reader who asks gets it instantly. A chapter that changes at the source is translated again.
 - The source language comes from the work's metadata, or is detected when the site doesn't say.
 - Speed depends on your CPU: roughly 1,000 words every 15–20 seconds. The reader shows progress while it works.

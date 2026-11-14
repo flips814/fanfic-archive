@@ -160,9 +160,13 @@
     window.addEventListener("resize", update);
     update();
   }
+})();
 
-  // ---- machine translation (LibreTranslate) --------------------------------------
-  // The chosen language is remembered, so the following chapters are translated too.
+// ---- machine translation (LibreTranslate) ----------------------------------------
+// Chapters, and a work's title and summary. The chosen language is remembered, so the
+// stories and chapters opened next are translated too.
+(function () {
+  "use strict";
   var tMenu = document.querySelector("[data-translate]");
   var tStatus = document.querySelector("[data-translate-status]");
   if (!tMenu || !tStatus) return;
@@ -170,9 +174,11 @@
   var tGo = tMenu.querySelector("[data-translate-go]");
   var tNote = tMenu.querySelector("[data-translate-note]");
   var tUrl = tMenu.getAttribute("data-url");
-  var titleEl = reader.querySelector(".reader-head h1");
-  var bodyEl = reader.querySelector(".chapter-body");
-  var original = { title: titleEl.innerHTML, body: bodyEl.innerHTML, lang: reader.getAttribute("lang") };
+  var titleEl = document.querySelector("[data-translate-title]");
+  var bodyEl = document.querySelector("[data-translate-body]");
+  var originals = [titleEl, bodyEl].filter(Boolean).map(function (el) {
+    return { el: el, html: el.innerHTML, lang: el.getAttribute("lang") };
+  });
   var langNames = {}, langsLoaded = null, active = null, pollTimer = null;
 
   function loadLanguages() {
@@ -269,9 +275,14 @@
   }
 
   function showTranslation(code, data) {
-    titleEl.textContent = data.title || titleEl.textContent;
-    bodyEl.innerHTML = data.content_html;
-    reader.setAttribute("lang", code);
+    if (titleEl && data.title) {
+      titleEl.textContent = data.title;
+      titleEl.setAttribute("lang", code);
+    }
+    if (bodyEl && data.content_html) {
+      bodyEl.innerHTML = data.content_html;
+      bodyEl.setAttribute("lang", code);
+    }
     showStatus("Machine-translated from " + (data.source_name || "the original") + " into " + (data.target_name || code) +
       ". It may get names, slang and tone wrong.", [stopAction()]);
     // Get the next chapter ready while this one is being read.
@@ -283,9 +294,10 @@
     clearTimeout(pollTimer);
     active = null;
     localStorage.removeItem("translateTo");
-    titleEl.innerHTML = original.title;
-    bodyEl.innerHTML = original.body;
-    if (original.lang) reader.setAttribute("lang", original.lang); else reader.removeAttribute("lang");
+    originals.forEach(function (o) {
+      o.el.innerHTML = o.html;
+      if (o.lang) o.el.setAttribute("lang", o.lang); else o.el.removeAttribute("lang");
+    });
     tStatus.hidden = true;
     tStatus.textContent = "";
     if (moveFocus) tMenu.querySelector("summary").focus();

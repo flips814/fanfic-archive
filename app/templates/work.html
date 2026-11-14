@@ -13,7 +13,7 @@
     {% if work.rating %}<span class="pill">{{ work.rating }}</span>{% endif %}
     <a href="#comments" class="pill pill-link">{{ icon("chat") }} {{ comment_count }} comment{{ "" if comment_count == 1 else "s" }}</a>
   </div>
-  <h1>{{ work.title }}</h1>
+  <h1 data-translate-title>{{ work.title }}</h1>
   <p class="byline">
     by {% if work.author_url %}<a href="{{ work.author_url }}" target="_blank" rel="noopener">{{ work.author or "unknown author" }}<span class="visually-hidden"> (opens in a new tab)</span></a>{% else %}{{ work.author or "unknown author" }}{% endif %}
     · <a href="{{ work.source_url }}" target="_blank" rel="noopener">View on {{ site_label(work.site) }}<span class="visually-hidden"> (opens in a new tab)</span></a>
@@ -28,7 +28,12 @@
     {% else %}
       <form method="post" action="/works/{{ work.id }}/follow"><button class="outline" aria-pressed="false">{{ icon("star") }} Follow</button></form>
     {% endif %}
+    {% if settings.translate_url %}
+      {% set translate_endpoint = "/works/%d/translation"|format(work.id) %}
+      {% include "_translate_menu.html" %}
+    {% endif %}
   </div>
+  {% if settings.translate_url %}<div class="translate-status" data-translate-status role="status" aria-live="polite" hidden></div>{% endif %}
 </header>
 
 {% if work.last_error %}
@@ -54,7 +59,7 @@
 {% if work.summary_html %}
 <section aria-labelledby="summary-h">
   <h2 id="summary-h" class="section-title">Summary</h2>
-  <blockquote class="summary">{{ work.summary_html|safe }}</blockquote>
+  <blockquote class="summary" data-translate-body>{{ work.summary_html|safe }}</blockquote>
 </section>
 {% endif %}
 

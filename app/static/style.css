@@ -398,12 +398,16 @@ code { font-size: max(.875em, 13px); overflow-wrap: anywhere; }
 .reader-panel .reset { margin: 0; }
 .reader-panel p { margin: 0; }
 .reader-tools { display: flex; flex-wrap: wrap; gap: .5rem; }
+@media (min-width: 641px) {
+  .actions .reader-panel { right: auto; left: 0; }
+}
+.actions .reader-panel button { justify-content: center; }
 
 .translate-status {
   display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem;
-  max-width: var(--reader-width); margin: 0 auto 1.5rem; padding: .6rem .9rem; font-size: .9rem;
+  max-width: var(--reader-width, none); margin: 0 auto 1.5rem; padding: .6rem .9rem; font-size: .9rem;
   border-left: 4px solid var(--pico-primary); border-radius: .5rem;
-  background: color-mix(in srgb, var(--reader-fg) 6%, transparent);
+  background: color-mix(in srgb, var(--reader-fg, var(--pico-color)) 6%, transparent);
 }
 .translate-status[hidden] { display: none; }
 .translate-status > span { flex: 1 1 16rem; }

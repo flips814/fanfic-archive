@@ -104,6 +104,7 @@ class Work(Base):
         order_by="(Chapter.number, Chapter.id)",
     )
     followers: Mapped[list["Follow"]] = relationship(back_populates="work", cascade="all, delete-orphan")
+    translations: Mapped[list["WorkTranslation"]] = relationship(back_populates="work", cascade="all, delete-orphan")
 
     @property
     def is_complete(self) -> bool:
@@ -155,6 +156,26 @@ class ChapterTranslation(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     chapter: Mapped[Chapter] = relationship(back_populates="translations")
+
+
+class WorkTranslation(Base):
+    """A machine translation of a work's title and summary."""
+
+    __tablename__ = "work_translations"
+    __table_args__ = (UniqueConstraint("work_id", "target_lang"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    work_id: Mapped[int] = mapped_column(ForeignKey("works.id", ondelete="CASCADE"), index=True)
+    target_lang: Mapped[str] = mapped_column(String(20))
+    source_lang: Mapped[str | None] = mapped_column(String(20))
+    title: Mapped[str] = mapped_column(String(1000))
+    summary_html: Mapped[str | None] = mapped_column(Text)
+    # sha256 of the title and summary it was made from
+    content_hash: Mapped[str] = mapped_column(String(64))
+    requested_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    work: Mapped[Work] = relationship(back_populates="translations")
 
 
 class Comment(Base):

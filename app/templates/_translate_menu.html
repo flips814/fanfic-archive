@@ -1,0 +1,16 @@
+{# Translate menu; expects translate_endpoint. Pages mark what it replaces with data-translate-title / -body. #}
+{% from "_macros.html" import icon %}
+<details class="reader-settings" data-translate
+         data-url="{{ translate_endpoint }}"
+         data-source="{{ work.language|lang_code }}">
+  <summary role="button" class="secondary outline">{{ icon("globe") }} Translate</summary>
+  <div class="reader-panel" role="group" aria-label="Translate">
+    <label class="setting">Translate into
+      <select data-translate-to disabled><option value="">Loading languages…</option></select>
+    </label>
+    <div class="reader-panel-buttons">
+      <button type="button" data-translate-go disabled>Translate</button>
+    </div>
+    <p class="muted small" data-translate-note>Machine translation by LibreTranslate on this archive's own server. Stories and chapters you open are translated too until you choose “Show original”.</p>
+  </div>
+</details>

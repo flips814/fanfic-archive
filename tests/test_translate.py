@@ -5,7 +5,7 @@ from sqlalchemy import select
 from app import translate
 from app.config import settings
 from app.db import SessionLocal
-from app.models import Chapter, ChapterTranslation, Work
+from app.models import Chapter, ChapterTranslation, Work, WorkTranslation
 from app.translate import find_language, split_html
 from tests.conftest import drain, login
 
@@ -187,9 +187,12 @@ def test_stale_running_translation_is_restarted(fake_site, sent, lt):
 def test_translation_off_hides_everything(fake_site, sent):
     work_id = _import(fake_site)
     alice = login("alice")
-    assert "data-translate" not in alice.get(f"/works/{work_id}/chapters/1").text
+    assert "data-translate=" not in alice.get(f"/works/{work_id}/chapters/1").text
+    assert "data-translate" not in alice.get(f"/works/{work_id}").text.replace("data-translate-title", "").replace(
+        "data-translate-body", "")
     assert alice.get("/translate/languages").status_code == 404
     assert alice.post(f"/works/{work_id}/chapters/1/translation", data={"to": "es"}).status_code == 404
+    assert alice.post(f"/works/{work_id}/translation", data={"to": "es"}).status_code == 404
 
 
 def test_translations_require_login_and_go_with_the_work(fake_site, sent, lt):
@@ -205,6 +208,48 @@ def test_translations_require_login_and_go_with_the_work(fake_site, sent, lt):
     alice.post("/works/%d/delete" % work_id)
     with SessionLocal() as db:
         assert db.scalar(select(ChapterTranslation.id)) is None
+
+
+def test_story_page_translates_title_and_summary(fake_site, sent, lt):
+    work_id = _import(fake_site)
+    with SessionLocal() as db:
+        db.get(Work, work_id).title = "Chapter of Text"
+        db.commit()
+    alice, bob = login("alice"), login("bob", admin=False)
+    page = alice.get(f"/works/{work_id}").text
+    assert f'data-url="/works/{work_id}/translation"' in page
+    assert "data-translate-title" in page and "data-translate-body" in page and "data-translate-status" in page
+
+    url = f"/works/{work_id}/translation"
+    assert alice.get(url, params={"to": "es"}).json() == {"status": "none"}
+    done = alice.post(url, data={"to": "es"}).json()  # short, so translated right away
+    assert done["status"] == "done", done
+    assert done["title"] == "Capítulo of Text"
+    assert done["content_html"].startswith("<p>Summary</p>") and "<script" not in done["content_html"]
+    assert done["source_name"] == "English" and done["target_name"] == "Spanish"
+
+    calls = lt.translate_calls()
+    assert bob.get(url, params={"to": "es"}).json()["title"] == "Capítulo of Text"
+    assert bob.post(url, data={"to": "es"}).json()["status"] == "done"
+    assert lt.translate_calls() == calls, "stored and shared"
+
+    with SessionLocal() as db:
+        db.get(Work, work_id).summary_html = "<p>Chapter summary, revised</p>"
+        db.commit()
+    assert alice.get(url, params={"to": "es"}).json() == {"status": "none"}
+    assert "Capítulo summary, revised" in alice.post(url, data={"to": "es"}).json()["content_html"]
+
+    lt.detected = "es"
+    with SessionLocal() as db:
+        db.get(Work, work_id).title = "Otro título"
+        db.commit()
+    failed = alice.post(url, data={"to": "es"}).json()
+    assert failed["status"] == "failed" and "story is already in Spanish" in failed["error"]
+    assert alice.post("/works/999/translation", data={"to": "es"}).status_code == 404
+
+    alice.post(f"/works/{work_id}/delete")
+    with SessionLocal() as db:
+        assert db.scalar(select(WorkTranslation.id)) is None
 
 
 def test_admin_translation_settings_and_test_button(lt):

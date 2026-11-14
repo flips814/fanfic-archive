@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.auth import current_user
 from app.config import settings
 from app.db import SessionLocal, get_db
-from app.models import Chapter, ChapterTranslation, User, utcnow
+from app.models import Chapter, ChapterTranslation, User, Work, WorkTranslation, utcnow
 from app.sanitize import clean_html
 
 log = logging.getLogger(__name__)
@@ -293,33 +293,87 @@ def run(translation_id: int) -> None:
         db.commit()
 
 
-def _translate(db: Session, t: ChapterTranslation) -> None:
-    chapter = t.chapter
+def _language_pair(work: Work, target_code: str, title: str, html: str | None, what: str) -> tuple[str, str]:
+    """(source, target) server codes, from the work's language or by detecting it in the text."""
     langs = languages()
-    target = find_language(t.target_lang, langs)
+    target = find_language(target_code, langs)
     if target is None:
-        raise TranslateError(f"the translation server doesn't offer “{t.target_lang}”.")
-    source = find_language(lang_code(chapter.work.language), langs)
+        raise TranslateError(f"the translation server doesn't offer “{target_code}”.")
+    source = find_language(lang_code(work.language), langs)
     if source is None:
-        sample = chapter.title + "\n" + _TAG_RE.sub(" ", chapter.content_html)
-        source = find_language(detect(sample), langs)
+        source = find_language(detect(title + "\n" + _TAG_RE.sub(" ", html or "")), langs)
         if source is None:
-            raise TranslateError("couldn't tell which language this chapter is written in.")
+            raise TranslateError(f"couldn't tell which language this {what} is written in.")
     if source["code"] == target["code"]:
-        raise TranslateError(f"this chapter is already in {target['name']}.")
+        raise TranslateError(f"this {what} is already in {target['name']}.")
     if target["code"] not in source["targets"]:
         raise TranslateError(f"the translation server can't translate {source['name']} into {target['name']}.")
+    return source["code"], target["code"]
 
-    src, dst = source["code"], target["code"]
-    title = translate_text(chapter.title, src, dst)
-    batches = split_html(chapter.content_html)
+
+def _translate_html(html: str, src: str, dst: str, on_progress=None) -> str:
+    batches = split_html(html)
     out = []
     for i, (batch, translatable) in enumerate(batches, 1):
         out.append(translate_text(batch, src, dst, "html") if translatable and _has_text(batch) else batch)
-        t.progress, t.updated_at = int(i * 100 / len(batches)), utcnow()
+        if on_progress:
+            on_progress(int(i * 100 / len(batches)))
+    return clean_html("".join(out))
+
+
+def _translate(db: Session, t: ChapterTranslation) -> None:
+    chapter = t.chapter
+    src, dst = _language_pair(chapter.work, t.target_lang, chapter.title, chapter.content_html, "chapter")
+
+    def progress(percent: int) -> None:
+        t.progress, t.updated_at = percent, utcnow()
         db.commit()
-    t.title, t.content_html, t.source_lang = title, clean_html("".join(out)), src
+
+    title = translate_text(chapter.title, src, dst)
+    t.content_html = _translate_html(chapter.content_html, src, dst, progress)
+    t.title, t.source_lang = title, src
     t.status, t.progress, t.updated_at = "done", 100, utcnow()
+
+
+# --------------------------------------------------------------- a work's title and summary
+
+def work_hash(work: Work) -> str:
+    return hashlib.sha256((work.title + "\0" + (work.summary_html or "")).encode()).hexdigest()
+
+
+def _find_work(db: Session, work: Work, target: str) -> WorkTranslation | None:
+    return db.scalar(select(WorkTranslation).where(
+        WorkTranslation.work_id == work.id, WorkTranslation.target_lang == target))
+
+
+def translate_work(db: Session, work: Work, target: str, user: User | None) -> WorkTranslation:
+    """Translate a work's title and summary right away (they're short), or return the stored copy."""
+    t = _find_work(db, work, target)
+    digest = work_hash(work)
+    if t is not None and t.content_hash == digest:
+        return t
+    src, dst = _language_pair(work, target, work.title, work.summary_html, "story")
+    title = translate_text(work.title, src, dst)
+    summary = _translate_html(work.summary_html, src, dst) if work.summary_html else None
+    if t is None:
+        t = WorkTranslation(work_id=work.id, target_lang=dst)
+        db.add(t)
+    t.title, t.summary_html, t.source_lang, t.content_hash = title, summary, src, digest
+    t.requested_by_id = user.id if user else None
+    try:
+        db.commit()
+    except IntegrityError:  # another reader translated it at the same moment
+        db.rollback()
+        t = _find_work(db, work, target)
+    return t
+
+
+def work_status(t: WorkTranslation | None, work: Work) -> dict:
+    if t is None or t.content_hash != work_hash(work):
+        return {"status": "none"}
+    return {"status": "done", "target": t.target_lang, "target_name": language_name(t.target_lang),
+            "title": t.title, "content_html": t.summary_html, "source": t.source_lang,
+            "source_name": language_name(t.source_lang)}
 
 
 def status(t: ChapterTranslation | None, chapter: Chapter) -> dict:
@@ -393,3 +447,35 @@ def request_translation(work_id: int, number: int, background: BackgroundTasks, 
     if needs_run:
         background.add_task(run, t.id)
     return status(t, chapter)
+
+
+def _work(db: Session, work_id: int) -> Work:
+    work = db.get(Work, work_id)
+    if work is None:
+        raise HTTPException(404, "Work not found")
+    return work
+
+
+@router.get("/works/{work_id}/translation")
+def get_work_translation(work_id: int, to: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _require_enabled()
+    work = _work(db, work_id)
+    return work_status(_find_work(db, work, to), work)
+
+
+@router.post("/works/{work_id}/translation")
+def request_work_translation(work_id: int, to: str = Form(...), db: Session = Depends(get_db),
+                             user: User = Depends(current_user)):
+    _require_enabled()
+    work = _work(db, work_id)
+    try:
+        target = find_language(to, languages())
+    except TranslateError as e:
+        raise HTTPException(502, f"Translation is unavailable: {e}")
+    if target is None:
+        raise HTTPException(400, "The translation server doesn't offer that language.")
+    try:
+        return work_status(translate_work(db, work, target["code"], user), work)
+    except TranslateError as e:
+        db.rollback()
+        return {"status": "failed", "error": f"Couldn't translate: {e}"}

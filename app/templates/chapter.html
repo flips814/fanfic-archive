@@ -9,20 +9,8 @@
 
   <div class="reader-tools">
     {% if settings.translate_url %}
-    <details class="reader-settings" data-translate
-             data-url="/works/{{ work.id }}/chapters/{{ chapter.number }}/translation"
-             data-source="{{ work.language|lang_code }}">
-      <summary role="button" class="secondary outline">{{ icon("globe") }} Translate</summary>
-      <div class="reader-panel" role="group" aria-label="Translate this chapter">
-        <label class="setting">Translate into
-          <select data-translate-to disabled><option value="">Loading languages…</option></select>
-        </label>
-        <div class="reader-panel-buttons">
-          <button type="button" data-translate-go disabled>Translate</button>
-        </div>
-        <p class="muted small" data-translate-note>Machine translation by LibreTranslate on this archive's own server. Later chapters are translated too until you choose “Show original”.</p>
-      </div>
-    </details>
+      {% set translate_endpoint = "/works/%d/chapters/%d/translation"|format(work.id, chapter.number) %}
+      {% include "_translate_menu.html" %}
     {% endif %}
 
     <details class="reader-settings">
@@ -80,7 +68,7 @@
 <article class="reader" data-reader {% if work.language|lang_code %}lang="{{ work.language|lang_code }}"{% endif %}>
   <header class="reader-head">
     <p class="reader-kicker">Chapter {{ chapter.number }} of {{ work.chapters|length }}</p>
-    <h1>{{ chapter.title }}</h1>
+    <h1 data-translate-title>{{ chapter.title }}</h1>
     <p class="muted small">
       {{ chapter.word_count|num }} words · about {{ ((chapter.word_count or 0) / 230)|round(0, 'ceil')|int or 1 }} min read
       · added {{ when(chapter.imported_at) }} by {{ who(chapter.imported_by) }}
@@ -89,7 +77,7 @@
     </p>
   </header>
   {% if settings.translate_url %}<div class="translate-status" data-translate-status role="status" aria-live="polite" hidden></div>{% endif %}
-  <div class="chapter-body">{{ chapter.content_html|safe }}</div>
+  <div class="chapter-body" data-translate-body>{{ chapter.content_html|safe }}</div>
 </article>
 
 <nav class="chapter-nav" aria-label="Chapters">
