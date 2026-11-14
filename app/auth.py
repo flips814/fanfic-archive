@@ -143,6 +143,29 @@ def _throttled(ip: str) -> bool:
     return len(attempts) >= _MAX_FAILURES
 
 
+def authenticate_local(request: Request, username: str, password: str, db: Session) -> User:
+    """Validate a local username/password. Raises HTTPException on failure."""
+    ip = request.client.host if request.client else "unknown"
+    if _throttled(ip):
+        raise HTTPException(429, "Too many failed attempts. Wait 10 minutes and try again.")
+    user = db.scalar(
+        select(User).where(User.oidc_issuer == LOCAL_ISSUER, User.oidc_sub == username.strip().lower())
+    )
+    if user is None or not verify_password(password, user.password_hash):
+        _FAILED[ip].append(time.monotonic())
+        raise HTTPException(401, "That username and password don't match.")
+    if user.disabled:
+        raise HTTPException(403, "This account has been disabled. Ask an admin.")
+    _FAILED.pop(ip, None)
+    user.last_login_at = utcnow()
+    return user
+
+
+def establish_session(request: Request, user: User) -> None:
+    request.session.clear()
+    request.session["user_id"] = user.id
+
+
 @router.post("/login/local")
 async def login_local(
     request: Request,
@@ -151,20 +174,12 @@ async def login_local(
     next: str = Form("/"),
     db: Session = Depends(get_db),
 ):
-    ip = request.client.host if request.client else "unknown"
-    if _throttled(ip):
-        return _login_page(request, db, "Too many failed attempts. Wait 10 minutes and try again.", 429)
-    user = db.scalar(select(User).where(User.oidc_issuer == LOCAL_ISSUER, User.oidc_sub == username.strip().lower()))
-    if user is None or not verify_password(password, user.password_hash):
-        _FAILED[ip].append(time.monotonic())
-        return _login_page(request, db, "That username and password don't match.", 401)
-    if user.disabled:
-        return _login_page(request, db, "This account has been disabled. Ask an admin.", 403)
-    _FAILED.pop(ip, None)
-    user.last_login_at = utcnow()
+    try:
+        user = authenticate_local(request, username, password, db)
+    except HTTPException as exc:
+        return _login_page(request, db, str(exc.detail), exc.status_code)
     db.commit()
-    request.session.clear()
-    request.session["user_id"] = user.id
+    establish_session(request, user)
     return RedirectResponse(_safe_next(next), status_code=303)
 
 

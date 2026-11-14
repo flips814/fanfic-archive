@@ -65,9 +65,10 @@ def test_api(fake_site, sent):
     body = alice.post("/api/imports", json={"urls": [url]}).json()
     assert body["jobs"][0]["status"] == "queued"
     drain()
-    works = alice.get("/api/works").json()
-    assert works[0]["title"] == "Api Fic" and works[0]["added_by"]["name"] == "Alice"
-    detail = alice.get(f"/api/works/{works[0]['id']}").json()
+    listing = alice.get("/api/works").json()
+    assert listing["total"] == 1 and listing["works"][0]["title"] == "Api Fic"
+    assert listing["works"][0]["added_by"]["name"] == "Alice"
+    detail = alice.get(f"/api/works/{listing['works'][0]['id']}").json()
     assert [c["imported_by"]["name"] for c in detail["chapter_list"]] == ["Alice", "Alice"]
     assert alice.get("/api/jobs").json()[0]["requested_by"]["name"] == "Alice"
     assert alice.get("/api/me").json()["name"] == "Alice"

@@ -5,3 +5,16 @@ __pycache__/
 *.db
 .pytest_cache/
 config/personal.ini
+
+# Android
+android/.gradle/
+android/**/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/captures/
+android/.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex

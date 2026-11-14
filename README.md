@@ -7,7 +7,7 @@ A self-hosted, multi-user fanfiction library that runs in Docker.
 - **Notify** followers of a work when new chapters arrive: Discord webhook, email, or any [Apprise](https://github.com/caronc/apprise) target (Telegram, ntfy, Pushover, Slack, Matrix, ...).
 - **OIDC login** (Authentik, Authelia, Keycloak, Zitadel, Pocket ID, Google, ...), so every import is tied to a real user.
 - **Who imported what**: works and chapters record the user who imported them; the Activity page is a full audit log of every import and update check; the Users page shows per-user totals.
-- Read in the browser or **download EPUB**. Small JSON API under `/api`.
+- Read in the browser, on the **[Android app](android/)**, or **download EPUB**. JSON API under `/api` for mobile clients.
 - **Translate** any chapter in the reader, using a bundled [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate) server (open source, runs on your machine, no text leaves your server).
 
 ## Quick start
@@ -97,16 +97,26 @@ Every chapter has a **Translate** button next to *Reading settings*, and every s
 
 ## API
 
-All endpoints use the same login session as the UI.
+Most endpoints use the same signed session cookie as the UI. Mobile clients call `POST /api/login` with a local username/password to obtain that cookie. `GET /api/info` is public (after first-time setup).
 
 | Method | Path | |
 | --- | --- | --- |
+| GET | `/api/info` | site name, API version, auth/feature flags (no login) |
+| POST | `/api/login` | `{"username","password"}` → session cookie + user |
+| POST | `/api/logout` | clear session |
 | GET | `/api/me` | current user |
-| GET | `/api/works?limit=&offset=` | list works |
-| GET | `/api/works/{id}` | work with chapter list and who imported each chapter |
+| GET | `/api/works?q=&site=&status=&mine=&followed=&limit=&offset=` | list works (`works`, `total`, `limit`, `offset`) |
+| GET | `/api/works/{id}` | work with chapter list, tags, `is_following` |
+| GET | `/api/works/{id}/chapters/{number}` | chapter HTML + prev/next |
+| POST | `/api/works/{id}/follow` | follow a work |
+| POST | `/api/works/{id}/unfollow` | unfollow a work |
 | POST | `/api/works/{id}/check` | queue an update check |
 | POST | `/api/imports` | `{"urls": ["..."]}` queue imports |
 | GET | `/api/jobs` | recent import/update jobs (audit log) |
+
+### Android app
+
+An open-source Jetpack Compose client lives in [`android/`](android/). Point it at your archive's public URL (or a LAN address with the HTTP toggle) and sign in with a local account.
 
 ## Testing
 
