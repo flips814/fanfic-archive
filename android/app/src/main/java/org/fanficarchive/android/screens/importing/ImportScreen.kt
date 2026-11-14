@@ -30,12 +30,13 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.ImportResponse
+import org.fanficarchive.android.screens.components.JobStatusPill
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImportScreen(
     repository: ArchiveRepository,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)? = null,
 ) {
     var urlsText by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
@@ -46,10 +47,21 @@ fun ImportScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Import works") },
+                title = {
+                    Column {
+                        Text("Add works")
+                        Text(
+                            "Paste story URLs, one per line",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 },
             )
@@ -64,8 +76,9 @@ fun ImportScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "Paste one story URL per line. Supported sites match your server (AO3, FF.net, Wattpad, Tumblr, and FanFicFare sites).",
+                "Supported sites match your server: AO3, FanFiction.net, Wattpad, Tumblr, and other FanFicFare sites. New imports are followed automatically.",
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedTextField(
                 value = urlsText,
@@ -73,7 +86,7 @@ fun ImportScreen(
                 label = { Text("URLs") },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp),
+                    .height(200.dp),
             )
             Button(
                 onClick = {
@@ -102,9 +115,13 @@ fun ImportScreen(
                 Text(
                     "Queued ${response.jobs.size} job${if (response.jobs.size == 1) "" else "s"}.",
                     color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.titleMedium,
                 )
                 response.jobs.forEach { job ->
-                    Text("#${job.id} ${job.status} — ${job.url}", style = MaterialTheme.typography.bodyMedium)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        JobStatusPill(job.status)
+                        Text(job.url.orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
                 if (response.rejected.isNotEmpty()) {
                     Text("Rejected:", color = MaterialTheme.colorScheme.error)

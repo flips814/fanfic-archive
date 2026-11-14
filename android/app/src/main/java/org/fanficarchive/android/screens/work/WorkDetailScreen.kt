@@ -1,8 +1,11 @@
 package org.fanficarchive.android.screens.work
 
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,15 +31,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
 import org.fanficarchive.android.data.ArchiveRepository
+import org.fanficarchive.android.data.CommentItem
 import org.fanficarchive.android.data.WorkDetail
 import org.fanficarchive.android.screens.components.ErrorText
+import org.fanficarchive.android.screens.components.FollowingPill
 import org.fanficarchive.android.screens.components.HtmlPane
 import org.fanficarchive.android.screens.components.LoadingBox
+import org.fanficarchive.android.screens.components.SiteBadge
+import org.fanficarchive.android.screens.components.StatusPill
+import org.fanficarchive.android.screens.components.TagGroup
+import org.fanficarchive.android.screens.components.formatNumber
+import org.fanficarchive.android.screens.components.relativeTime
+import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun WorkDetailScreen(
     repository: ArchiveRepository,
@@ -44,20 +57,29 @@ fun WorkDetailScreen(
     baseUrl: String,
     onBack: () -> Unit,
     onOpenChapter: (Int) -> Unit,
+    onDeleted: () -> Unit,
 ) {
     var work by remember { mutableStateOf<WorkDetail?>(null) }
+    var comments by remember { mutableStateOf<List<CommentItem>>(emptyList()) }
+    var commentDraft by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     fun load() {
         scope.launch {
             loading = true
             error = null
-            runCatching { repository.getWork(workId) }
-                .onSuccess { work = it }
-                .onFailure { error = repository.errorMessage(it) }
+            runCatching {
+                val detail = repository.getWork(workId)
+                val thread = repository.listComments(workId)
+                detail to thread
+            }.onSuccess { (detail, thread) ->
+                work = detail
+                comments = thread.comments
+            }.onFailure { error = repository.errorMessage(it) }
             loading = false
         }
     }
@@ -89,25 +111,69 @@ fun WorkDetailScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SiteBadge(detail.site)
+                        StatusPill(detail.status)
+                        if (detail.isFollowing) FollowingPill()
+                        if (detail.rating != null) {
+                            Text(detail.rating, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text(
+                            "${detail.commentCount} comments",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Text(detail.title, style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        listOfNotNull(detail.author, detail.site, detail.status, detail.rating)
-                            .joinToString(" · "),
+                        "by ${detail.author ?: "unknown author"}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        listOfNotNull(
+                            "${detail.chapters} chapters",
+                            "${formatNumber(detail.wordCount)} words",
+                            detail.addedBy?.let { "imported by ${it.name}" },
+                            "updated ${relativeTime(detail.lastNewChapterAt ?: detail.createdAt)}",
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    detail.addedBy?.let {
-                        Text("Imported by ${it.name}", style = MaterialTheme.typography.bodyMedium)
-                    }
                     detail.lastError?.let {
                         Text("Update error: $it", color = MaterialTheme.colorScheme.error)
                     }
-                    TagBlock("Fandoms", detail.fandoms)
-                    TagBlock("Tags", detail.tags)
-                    TagBlock("Warnings", detail.warnings)
-                    if (!detail.summaryHtml.isNullOrBlank()) {
-                        Text("Summary", style = MaterialTheme.typography.titleMedium)
-                        HtmlPane(html = detail.summaryHtml, baseUrl = baseUrl, fontScale = 1f, theme = "light")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        val firstChapter = detail.chapterList.firstOrNull()?.number
+                        Button(
+                            onClick = { firstChapter?.let(onOpenChapter) },
+                            enabled = firstChapter != null,
+                            modifier = Modifier.weight(1f),
+                        ) { Text("Start reading") }
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching { repository.downloadEpub(workId) }
+                                        .onSuccess { (name, bytes) ->
+                                            val file = File(context.cacheDir, name)
+                                            file.writeBytes(bytes)
+                                            val uri = FileProvider.getUriForFile(
+                                                context,
+                                                "${context.packageName}.files",
+                                                file,
+                                            )
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "application/epub+zip"
+                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(Intent.createChooser(intent, "Share EPUB"))
+                                        }
+                                        .onFailure { error = repository.errorMessage(it) }
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("EPUB") }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
@@ -118,24 +184,40 @@ fun WorkDetailScreen(
                                         .onFailure { error = repository.errorMessage(it) }
                                 }
                             },
-                        ) {
-                            Text(if (detail.isFollowing) "Unfollow" else "Follow")
-                        }
+                        ) { Text(if (detail.isFollowing) "Following" else "Follow") }
                         OutlinedButton(
                             onClick = {
                                 scope.launch {
                                     runCatching { repository.checkUpdates(workId) }
-                                        .onSuccess { statusMessage = "Update check queued (${it.status})" }
+                                        .onSuccess { statusMessage = "Update check queued" }
                                         .onFailure { error = repository.errorMessage(it) }
                                 }
                             },
-                        ) {
-                            Text("Check updates")
+                        ) { Text("Check updates") }
+                        if (detail.canManage) {
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching { repository.toggleAutoUpdate(workId) }
+                                            .onSuccess { work = detail.copy(autoUpdate = it.autoUpdate) }
+                                            .onFailure { error = repository.errorMessage(it) }
+                                    }
+                                },
+                            ) { Text(if (detail.autoUpdate) "Auto-update on" else "Auto-update off") }
                         }
                     }
                     statusMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    Text("Chapters", style = MaterialTheme.typography.titleMedium)
+                    TagGroup("Fandoms", detail.fandoms)
+                    TagGroup("Warnings", detail.warnings)
+                    TagGroup("Relationships", detail.relationships)
+                    TagGroup("Characters", detail.characters)
+                    TagGroup("Tags", detail.tags)
+                    if (!detail.summaryHtml.isNullOrBlank()) {
+                        Text("Summary", style = MaterialTheme.typography.titleMedium)
+                        HtmlPane(html = detail.summaryHtml, baseUrl = baseUrl, fontScale = 1f, theme = "site")
+                    }
+                    Text("Chapters", style = MaterialTheme.typography.titleLarge)
                     detail.chapterList.forEach { chapter ->
                         Column(
                             modifier = Modifier
@@ -146,14 +228,53 @@ fun WorkDetailScreen(
                             Text("${chapter.number}. ${chapter.title}", style = MaterialTheme.typography.titleMedium)
                             Text(
                                 listOfNotNull(
-                                    chapter.wordCount?.let { "%,d words".format(it) },
+                                    formatNumber(chapter.wordCount) + " words",
                                     chapter.importedBy?.name?.let { "by $it" },
+                                    if (chapter.commentCount > 0) "${chapter.commentCount} comments" else null,
                                     if (chapter.removedFromSource) "removed from source" else null,
                                 ).joinToString(" · "),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                    }
+                    Text("Comments (${comments.sumOf { 1 + it.replies.size }})", style = MaterialTheme.typography.titleLarge)
+                    comments.forEach { comment ->
+                        CommentBlock(comment)
+                        comment.replies.forEach { reply ->
+                            CommentBlock(reply, indented = true)
+                        }
+                    }
+                    androidx.compose.material3.OutlinedTextField(
+                        value = commentDraft,
+                        onValueChange = { commentDraft = it },
+                        label = { Text("Write a comment") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                    )
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                runCatching { repository.postComment(workId, commentDraft) }
+                                    .onSuccess {
+                                        commentDraft = ""
+                                        load()
+                                    }
+                                    .onFailure { error = repository.errorMessage(it) }
+                            }
+                        },
+                        enabled = commentDraft.isNotBlank(),
+                    ) { Text("Post comment") }
+                    if (detail.canManage) {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching { repository.deleteWork(workId) }
+                                        .onSuccess { onDeleted() }
+                                        .onFailure { error = repository.errorMessage(it) }
+                                }
+                            },
+                        ) { Text("Delete work") }
                     }
                 }
             }
@@ -162,10 +283,26 @@ fun WorkDetailScreen(
 }
 
 @Composable
-private fun TagBlock(label: String, values: List<String>) {
-    if (values.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, style = MaterialTheme.typography.titleMedium)
-        Text(values.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
+private fun CommentBlock(comment: CommentItem, indented: Boolean = false) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = if (indented) 16.dp else 0.dp, bottom = 8.dp),
+    ) {
+        Text(
+            if (comment.deleted) "Deleted comment" else (comment.user?.name ?: "User"),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            if (comment.deleted) {
+                "This comment was removed."
+            } else if (comment.spoiler) {
+                "Spoiler: ${comment.body}"
+            } else {
+                comment.body.orEmpty()
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

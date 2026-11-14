@@ -32,6 +32,7 @@ def test_info_is_public_and_describes_auth():
     assert "site_name" in info
     assert info["auth"]["local"] is False
     assert info["auth"]["oidc"] is False
+    assert info["auth"]["oidc_provider_name"] is None
     assert info["features"]["epub"] is True
 
     _local_user("ann", "password123")

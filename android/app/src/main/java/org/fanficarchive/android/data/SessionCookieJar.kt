@@ -1,5 +1,6 @@
 package org.fanficarchive.android.data
 
+import android.webkit.CookieManager
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -32,6 +33,19 @@ class SessionCookieJar : CookieJar {
     fun hasSession(baseUrl: String): Boolean {
         val url = (baseUrl.trimEnd('/') + "/").toHttpUrlOrNull() ?: return false
         return loadForRequest(url).any { it.name == "session" }
+    }
+
+    /** Copy WebView cookies (after browser SSO) into the OkHttp jar. */
+    fun importFromCookieManager(baseUrl: String): Boolean {
+        val url = (baseUrl.trimEnd('/') + "/").toHttpUrlOrNull() ?: return false
+        val header = CookieManager.getInstance().getCookie(url.toString()) ?: return false
+        val cookies = header.split(";")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .mapNotNull { Cookie.parse(url, it) }
+        if (cookies.isEmpty()) return false
+        saveFromResponse(url, cookies)
+        return cookies.any { it.name == "session" }
     }
 
     private fun hostKey(url: HttpUrl): String = "${url.host}:${url.port}"

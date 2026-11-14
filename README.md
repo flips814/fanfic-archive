@@ -97,7 +97,7 @@ Every chapter has a **Translate** button next to *Reading settings*, and every s
 
 ## API
 
-Most endpoints use the same signed session cookie as the UI. Mobile clients call `POST /api/login` with a local username/password to obtain that cookie. `GET /api/info` is public (after first-time setup).
+Most endpoints use the same signed session cookie as the UI. Mobile clients call `POST /api/login` with a local username/password, or complete the website SSO flow and reuse the `session` cookie. `GET /api/info` is public (after first-time setup) and reports whether local and OIDC sign-in are available.
 
 | Method | Path | |
 | --- | --- | --- |
@@ -105,14 +105,21 @@ Most endpoints use the same signed session cookie as the UI. Mobile clients call
 | POST | `/api/login` | `{"username","password"}` → session cookie + user |
 | POST | `/api/logout` | clear session |
 | GET | `/api/me` | current user |
-| GET | `/api/works?q=&site=&status=&mine=&followed=&limit=&offset=` | list works (`works`, `total`, `limit`, `offset`) |
-| GET | `/api/works/{id}` | work with chapter list, tags, `is_following` |
-| GET | `/api/works/{id}/chapters/{number}` | chapter HTML + prev/next |
+| GET | `/api/works?q=&site=&status=&mine=&followed=&added_by=&limit=&offset=` | list works (`works`, `total`, `sites`, …) |
+| GET | `/api/works/{id}` | work detail, tags, chapters, `is_following`, `can_manage` |
+| GET | `/api/works/{id}/chapters/{number}` | chapter HTML + prev/next + comment count |
 | POST | `/api/works/{id}/follow` | follow a work |
 | POST | `/api/works/{id}/unfollow` | unfollow a work |
 | POST | `/api/works/{id}/check` | queue an update check |
+| POST | `/api/works/{id}/auto-update` | toggle auto-update (owner/admin) |
+| DELETE | `/api/works/{id}` | delete work (owner/admin) |
 | POST | `/api/imports` | `{"urls": ["..."]}` queue imports |
-| GET | `/api/jobs` | recent import/update jobs (audit log) |
+| GET | `/api/jobs?kind=&status=&user_id=&limit=&offset=` | activity log |
+| GET | `/api/users` | users and import stats |
+| GET/POST | `/api/works/{id}/comments` | list / create comments |
+| POST | `/api/comments/{id}/edit` | edit own comment |
+| POST | `/api/comments/{id}/delete` | delete comment |
+| GET/POST | `/api/settings` | notification preferences |
 
 ### Android app
 

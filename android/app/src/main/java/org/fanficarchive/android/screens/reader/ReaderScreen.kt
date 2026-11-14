@@ -1,10 +1,13 @@
 package org.fanficarchive.android.screens.reader
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -33,6 +36,9 @@ import org.fanficarchive.android.data.ReaderPrefs
 import org.fanficarchive.android.screens.components.ErrorText
 import org.fanficarchive.android.screens.components.HtmlPane
 import org.fanficarchive.android.screens.components.LoadingBox
+import org.fanficarchive.android.screens.components.formatNumber
+import kotlin.math.ceil
+import kotlin.math.max
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,20 +64,27 @@ fun ReaderScreen(
         loading = false
     }
 
+    val progress = chapter?.let {
+        if (it.workChapters <= 0) 0f else it.number.toFloat() / it.workChapters.toFloat()
+    } ?: 0f
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text(chapter?.workTitle ?: "Reader", style = MaterialTheme.typography.titleMedium)
+                        Text(chapter?.workTitle ?: "Reader", style = MaterialTheme.typography.titleMedium, maxLines = 1)
                         chapter?.let {
-                            Text("${it.number}. ${it.title}", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "Chapter ${it.number} of ${it.workChapters}",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                         }
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Contents")
                     }
                 },
             )
@@ -91,6 +104,7 @@ fun ReaderScreen(
                         Icon(Icons.AutoMirrored.Filled.NavigateBefore, contentDescription = null)
                         Text("Previous")
                     }
+                    OutlinedButton(onClick = onBack) { Text("Contents") }
                     OutlinedButton(
                         onClick = { ch.nextNumber?.let(onOpenChapter) },
                         enabled = ch.nextNumber != null,
@@ -102,19 +116,55 @@ fun ReaderScreen(
             }
         },
     ) { padding ->
-        when {
-            loading -> LoadingBox(Modifier.padding(padding))
-            error != null -> ErrorText(error!!, Modifier.padding(padding))
-            chapter != null -> {
-                HtmlPane(
-                    html = chapter!!.contentHtml,
-                    baseUrl = baseUrl,
-                    fontScale = readerPrefs.fontScale,
-                    theme = readerPrefs.theme,
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
+                        .fillMaxWidth(progress.coerceIn(0f, 1f))
+                        .height(4.dp)
+                        .background(MaterialTheme.colorScheme.primary),
                 )
+            }
+            when {
+                loading -> LoadingBox()
+                error != null -> ErrorText(error!!)
+                chapter != null -> {
+                    val ch = chapter!!
+                    val minutes = max(1, ceil((ch.wordCount ?: 0) / 230.0).toInt())
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Text(
+                            ch.title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                        Text(
+                            listOfNotNull(
+                                "${formatNumber(ch.wordCount)} words",
+                                "about $minutes min",
+                                if (ch.commentCount > 0) "${ch.commentCount} comments" else null,
+                            ).joinToString(" · "),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                        HtmlPane(
+                            html = ch.contentHtml,
+                            baseUrl = baseUrl,
+                            fontScale = readerPrefs.fontScale,
+                            theme = readerPrefs.theme,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
         }
     }
