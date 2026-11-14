@@ -63,6 +63,13 @@ def _call(method: str, path: str, timeout: int | None = None, **kwargs):
     try:
         resp = requests.request(method, settings.translate_url + path,
                                 timeout=timeout or settings.translate_timeout_seconds or 120, **kwargs)
+    except requests.ConnectionError as e:
+        raise TranslateError(
+            f"couldn't reach the translation server at {settings.translate_url}. If it was started in the last "
+            "few minutes it may still be downloading languages; otherwise check that it's running."
+        ) from e
+    except requests.Timeout as e:
+        raise TranslateError("the translation server took too long to answer.") from e
     except requests.RequestException as e:
         raise TranslateError(f"couldn't reach the translation server ({e.__class__.__name__}).") from e
     try:
