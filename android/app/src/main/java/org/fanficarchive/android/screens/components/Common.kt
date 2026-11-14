@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -22,10 +23,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -99,16 +105,36 @@ fun FanficCard(
     }
 }
 
+private val MetaShape = RoundedCornerShape(999.dp)
+
 @Composable
-fun SiteBadge(site: String?, modifier: Modifier = Modifier) {
+fun MetaChip(
+    text: String,
+    modifier: Modifier = Modifier,
+    foreground: Color = MaterialTheme.colorScheme.onSurface,
+    background: Color = Color.Transparent,
+    border: Color? = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+) {
     Text(
-        text = siteLabel(site),
-        color = Color.White,
+        text = text,
+        color = foreground,
         style = MaterialTheme.typography.labelMedium,
         modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(siteBadgeColor(site))
-            .padding(horizontal = 10.dp, vertical = 3.dp),
+            .clip(MetaShape)
+            .background(background)
+            .then(if (border != null) Modifier.border(1.dp, border, MetaShape) else Modifier)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    )
+}
+
+@Composable
+fun SiteBadge(site: String?, modifier: Modifier = Modifier) {
+    MetaChip(
+        text = siteLabel(site),
+        modifier = modifier,
+        foreground = Color.White,
+        background = siteBadgeColor(site),
+        border = null,
     )
 }
 
@@ -117,26 +143,23 @@ fun StatusPill(status: String?, modifier: Modifier = Modifier) {
     if (status.isNullOrBlank()) return
     val complete = isCompleteStatus(status)
     val color = if (complete) PillComplete else PillOngoing
-    Text(
+    MetaChip(
         text = if (complete) "Complete" else "In progress",
-        color = color,
-        style = MaterialTheme.typography.labelMedium,
-        modifier = modifier
-            .border(1.dp, color, RoundedCornerShape(999.dp))
-            .padding(horizontal = 10.dp, vertical = 3.dp),
+        modifier = modifier,
+        foreground = color,
+        border = color,
     )
 }
 
 @Composable
 fun FollowingPill(modifier: Modifier = Modifier) {
     val color = MaterialTheme.colorScheme.primary
-    Text(
+    MetaChip(
         text = "Following",
-        color = color,
-        style = MaterialTheme.typography.labelMedium,
-        modifier = modifier
-            .border(1.dp, color, RoundedCornerShape(999.dp))
-            .padding(horizontal = 10.dp, vertical = 3.dp),
+        modifier = modifier,
+        foreground = color,
+        background = color.copy(alpha = 0.1f),
+        border = color,
     )
 }
 
@@ -148,14 +171,48 @@ fun JobStatusPill(status: String, modifier: Modifier = Modifier) {
         "running" -> JobRunning to Color(0xFF1A1A1A)
         else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
-    Text(
+    MetaChip(
         text = status.replaceFirstChar { it.uppercase() },
+        modifier = modifier,
+        foreground = fg,
+        background = bg,
+        border = null,
+    )
+}
+
+/** Soft violet tag chip matching the website `.tags .tag`. */
+@Composable
+fun TagChip(text: String, modifier: Modifier = Modifier) {
+    MetaChip(
+        text = text,
+        modifier = modifier,
+        foreground = MaterialTheme.colorScheme.onSurface,
+        background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+        border = null,
+    )
+}
+
+/** Selectable filter / choice chip used in Library and Activity. */
+@Composable
+fun FilterTag(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+    val border = if (selected) null else MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
+    Text(
+        text = label,
         color = fg,
-        style = MaterialTheme.typography.labelMedium,
+        style = MaterialTheme.typography.labelLarge,
         modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
+            .clip(MetaShape)
             .background(bg)
-            .padding(horizontal = 10.dp, vertical = 3.dp),
+            .then(if (border != null) Modifier.border(1.5.dp, border, MetaShape) else Modifier)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     )
 }
 
@@ -182,14 +239,13 @@ fun WorkCard(work: WorkSummary, onClick: () -> Unit, modifier: Modifier = Modifi
             modifier = Modifier.padding(top = 4.dp),
         )
         if (work.fandoms.isNotEmpty()) {
-            Text(
-                work.fandoms.take(3).joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            FlowRow(
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                work.fandoms.take(3).forEach { TagChip(it) }
+            }
         }
         Row(
             modifier = Modifier
@@ -225,12 +281,22 @@ private fun RowScope.StatCell(label: String, value: String) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TagGroup(label: String, values: List<String>, modifier: Modifier = Modifier) {
     if (values.isEmpty()) return
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, style = MaterialTheme.typography.titleMedium)
-        Text(values.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            values.forEach { TagChip(it) }
+        }
     }
 }
 
@@ -241,8 +307,12 @@ fun HtmlPane(
     baseUrl: String,
     fontScale: Float = 1.1f,
     theme: String = "sepia",
+    /** When true, sizes to document height so a parent Column can scroll the whole page. */
+    wrapContentHeight: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val density = LocalDensity.current
+    var contentHeightPx by remember(html, fontScale, theme) { mutableIntStateOf(0) }
     val (bg, fg, link) = when (theme) {
         "dark" -> Triple("#18181b", "#e7e3da", "#c4b5fd")
         "light" -> Triple("#ffffff", "#1f1f24", "#5b21b6")
@@ -254,27 +324,74 @@ fun HtmlPane(
         <!DOCTYPE html><html><head>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
         <style>
-          body { margin: 0; padding: 16px; background: $bg; color: $fg;
-                 font-family: Georgia, "Times New Roman", serif; font-size: ${16 * fontScale}px; line-height: 1.75; }
+          html, body { margin: 0; padding: 0; background: $bg; color: $fg; }
+          body { padding: 16px; font-family: Georgia, "Times New Roman", serif;
+                 font-size: ${16 * fontScale}px; line-height: 1.75; }
           a { color: $link; }
           img { max-width: 100%; height: auto; }
           p { margin: 0 0 1em; }
         </style></head><body>$html</body></html>
     """.trimIndent()
 
+    val heightModifier = if (wrapContentHeight) {
+        val h = contentHeightPx
+        if (h > 0) Modifier.height(with(density) { h.toDp() }) else Modifier.height(120.dp)
+    } else {
+        Modifier
+    }
+
     AndroidView(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .then(heightModifier),
         factory = { context ->
             WebView(context).apply {
-                webViewClient = WebViewClient()
-                settings.javaScriptEnabled = false
-                settings.builtInZoomControls = true
+                settings.javaScriptEnabled = wrapContentHeight
+                settings.builtInZoomControls = !wrapContentHeight
                 settings.displayZoomControls = false
+                isVerticalScrollBarEnabled = !wrapContentHeight
+                isHorizontalScrollBarEnabled = false
+                overScrollMode = android.view.View.OVER_SCROLL_NEVER
                 setBackgroundColor(android.graphics.Color.parseColor(bg))
             }
         },
         update = { webView ->
-            webView.loadDataWithBaseURL(baseUrl, page, "text/html", "UTF-8", null)
+            webView.setBackgroundColor(android.graphics.Color.parseColor(bg))
+            webView.settings.javaScriptEnabled = wrapContentHeight
+            webView.isVerticalScrollBarEnabled = !wrapContentHeight
+            if (wrapContentHeight) {
+                // Let the Compose parent own vertical scrolling.
+                webView.setOnTouchListener { _, _ -> false }
+            } else {
+                webView.setOnTouchListener(null)
+            }
+            webView.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    if (!wrapContentHeight || view == null) return
+                    view.post {
+                        fun reportHeight() {
+                            val fromContent = (view.contentHeight * view.scale).toInt()
+                            if (fromContent > 0 && fromContent != contentHeightPx) {
+                                contentHeightPx = fromContent
+                            }
+                        }
+                        reportHeight()
+                        view.postDelayed({ reportHeight() }, 150)
+                        view.postDelayed({ reportHeight() }, 450)
+                        view.evaluateJavascript(
+                            "(function(){return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);})()",
+                        ) { value ->
+                            val css = value?.trim('"')?.toFloatOrNull() ?: return@evaluateJavascript
+                            val px = (css * view.resources.displayMetrics.density).toInt().coerceAtLeast(1)
+                            if (px != contentHeightPx) contentHeightPx = px
+                        }
+                    }
+                }
+            }
+            if (webView.tag != page) {
+                webView.tag = page
+                webView.loadDataWithBaseURL(baseUrl, page, "text/html", "UTF-8", null)
+            }
         },
     )
 }

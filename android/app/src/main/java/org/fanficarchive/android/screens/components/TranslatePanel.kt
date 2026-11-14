@@ -1,17 +1,21 @@
 package org.fanficarchive.android.screens.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,7 +44,7 @@ data class TranslatedText(
 )
 
 /**
- * Site-style Translate control: language picker, Translate / Show original, progress and errors.
+ * Site-style Translate control: collapsible language picker + Translate / Show original.
  * When [enabled] is false (server has no LibreTranslate), renders nothing.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,7 +68,7 @@ fun TranslatePanel(
 
     var languages by remember { mutableStateOf<List<TranslateLanguage>>(emptyList()) }
     var selected by remember { mutableStateOf(preferredCode) }
-    var expanded by remember { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
     var open by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
@@ -168,7 +172,6 @@ fun TranslatePanel(
             }
     }
 
-    // Remembered language from the site / prior screens: auto-translate once per page.
     LaunchedEffect(preferredCode, languages) {
         if (preferredCode.isNotBlank() &&
             languages.any { it.code == preferredCode } &&
@@ -179,94 +182,104 @@ fun TranslatePanel(
         }
     }
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Translate", style = MaterialTheme.typography.titleMedium)
-                QuietButton(onClick = { open = !open }) {
-                    ButtonLabel(if (open) "Hide" else "Show")
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { open = !open },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Translate", style = MaterialTheme.typography.titleMedium)
+                        if (!open && activeCode != null) {
+                            Text(
+                                languages.find { it.code == activeCode }?.name ?: activeCode!!,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = if (open) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (open) "Hide translate options" else "Show translate options",
+                    )
                 }
-            }
 
-            if (open || activeCode != null || busy || error != null) {
-                if (languages.isNotEmpty()) {
-                    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-                        OutlinedTextField(
-                            value = languages.find { it.code == selected }?.name ?: selected,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Translate into") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                            modifier = Modifier
-                                .menuAnchor()
-                                .fillMaxWidth(),
-                            enabled = !busy,
+                if (open) {
+                    if (languages.isNotEmpty()) {
+                        ExposedDropdownMenuBox(expanded = menuExpanded, onExpandedChange = { menuExpanded = it }) {
+                            FanficTextField(
+                                value = languages.find { it.code == selected }?.name ?: selected,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = "Translate into",
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(menuExpanded) },
+                                textFieldModifier = Modifier.menuAnchor(),
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !busy,
+                            )
+                            ExposedDropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                                languages.forEach { lang ->
+                                    DropdownMenuItem(
+                                        text = { Text(lang.name) },
+                                        onClick = {
+                                            selected = lang.code
+                                            menuExpanded = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PrimaryButton(
+                                onClick = { startTranslation(selected) },
+                                enabled = selected.isNotBlank() && !busy,
+                            ) { ButtonLabel("Translate") }
+                            if (activeCode != null) {
+                                SecondaryButton(onClick = { clearTranslation() }) {
+                                    ButtonLabel("Show original")
+                                }
+                            }
+                        }
+                    } else if (error == null) {
+                        Text(
+                            "Loading languages…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            languages.forEach { lang ->
-                                DropdownMenuItem(
-                                    text = { Text(lang.name) },
-                                    onClick = {
-                                        selected = lang.code
-                                        expanded = false
-                                    },
-                                )
-                            }
-                        }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PrimaryButton(
-                            onClick = { startTranslation(selected) },
-                            enabled = selected.isNotBlank() && !busy,
-                        ) { ButtonLabel("Translate") }
-                        if (activeCode != null) {
-                            SecondaryButton(onClick = { clearTranslation() }) {
-                                ButtonLabel("Show original")
-                            }
-                        }
-                    }
-                } else if (error == null) {
                     Text(
-                        "Loading languages…",
+                        "Machine translation by LibreTranslate on this archive’s own server. Chosen language sticks until you show the original.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+        }
 
-                progress?.let {
-                    LinearProgressIndicator(
-                        progress = { (it.coerceIn(0, 100) / 100f) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                statusMessage?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                    if (activeCode != null && !busy) {
-                        QuietButton(onClick = { clearTranslation() }) { ButtonLabel("Show original") }
-                    }
-                }
-                error?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-                    if (selected.isNotBlank()) {
-                        QuietButton(onClick = { startTranslation(selected) }) { ButtonLabel("Try again") }
-                    }
-                }
-                Text(
-                    "Machine translation by LibreTranslate on this archive’s own server. Chosen language sticks until you show the original.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        // Status stays visible even when the panel is collapsed (like the site's status line).
+        progress?.let {
+            LinearProgressIndicator(
+                progress = { (it.coerceIn(0, 100) / 100f) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        statusMessage?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            if (activeCode != null && !busy && !open) {
+                QuietButton(onClick = { clearTranslation() }) { ButtonLabel("Show original") }
+            }
+        }
+        error?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+            if (selected.isNotBlank()) {
+                QuietButton(onClick = { startTranslation(selected); open = true }) { ButtonLabel("Try again") }
             }
         }
     }

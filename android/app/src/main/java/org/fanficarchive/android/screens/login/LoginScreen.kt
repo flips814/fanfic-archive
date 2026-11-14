@@ -21,7 +21,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -42,6 +41,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.ServerInfo
 import org.fanficarchive.android.screens.components.ButtonLabel
+import org.fanficarchive.android.screens.components.FanficTextField
 import org.fanficarchive.android.screens.components.PrimaryButton
 import org.fanficarchive.android.screens.components.SecondaryButton
 
@@ -130,18 +130,16 @@ fun LoginScreen(
                 if (oidcAvailable) {
                     Text("Or use a local account", style = MaterialTheme.typography.titleMedium)
                 }
-                OutlinedTextField(
+                FanficTextField(
                     value = username,
                     onValueChange = { username = it; error = null },
-                    label = { Text("Username") },
-                    singleLine = true,
+                    label = "Username",
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                FanficTextField(
                     value = password,
                     onValueChange = { password = it; error = null },
-                    label = { Text("Password") },
-                    singleLine = true,
+                    label = "Password",
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth(),

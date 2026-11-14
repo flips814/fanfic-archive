@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -14,7 +13,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -30,6 +28,7 @@ import kotlinx.coroutines.launch
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.ImportResponse
 import org.fanficarchive.android.screens.components.ButtonLabel
+import org.fanficarchive.android.screens.components.FanficTextField
 import org.fanficarchive.android.screens.components.JobStatusPill
 import org.fanficarchive.android.screens.components.PrimaryButton
 
@@ -81,13 +80,14 @@ fun ImportScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedTextField(
+            FanficTextField(
                 value = urlsText,
                 onValueChange = { urlsText = it; error = null },
-                label = { Text("URLs") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp),
+                label = "URLs",
+                placeholder = "https://archiveofourown.org/works/…",
+                singleLine = false,
+                minLines = 8,
+                modifier = Modifier.fillMaxWidth(),
             )
             PrimaryButton(
                 onClick = {

@@ -18,7 +18,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -41,9 +40,11 @@ import org.fanficarchive.android.data.ReaderPrefs
 import org.fanficarchive.android.data.WorkDetail
 import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.ErrorText
+import org.fanficarchive.android.screens.components.FanficTextField
 import org.fanficarchive.android.screens.components.FollowingPill
 import org.fanficarchive.android.screens.components.HtmlPane
 import org.fanficarchive.android.screens.components.LoadingBox
+import org.fanficarchive.android.screens.components.MetaChip
 import org.fanficarchive.android.screens.components.PrimaryButton
 import org.fanficarchive.android.screens.components.SecondaryButton
 import org.fanficarchive.android.screens.components.SiteBadge
@@ -136,13 +137,9 @@ fun WorkDetailScreen(
                         StatusPill(detail.status)
                         if (detail.isFollowing) FollowingPill()
                         if (detail.rating != null) {
-                            Text(detail.rating, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            MetaChip(text = detail.rating)
                         }
-                        Text(
-                            "${detail.commentCount} comments",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        MetaChip(text = "${detail.commentCount} comments")
                     }
                     Text(displayTitle, style = MaterialTheme.typography.headlineSmall)
                     Text(
@@ -279,12 +276,13 @@ fun WorkDetailScreen(
                             CommentBlock(reply, indented = true)
                         }
                     }
-                    OutlinedTextField(
+                    FanficTextField(
                         value = commentDraft,
                         onValueChange = { commentDraft = it },
-                        label = { Text("Write a comment") },
-                        modifier = Modifier.fillMaxWidth(),
+                        label = "Write a comment",
+                        singleLine = false,
                         minLines = 3,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     PrimaryButton(
                         onClick = {
