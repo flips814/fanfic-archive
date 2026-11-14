@@ -15,6 +15,7 @@ data class ServerInfo(
 data class AuthCapabilities(
     val local: Boolean = false,
     val oidc: Boolean = false,
+    @SerialName("oidc_provider_name") val oidcProviderName: String? = null,
 )
 
 @Serializable
@@ -28,10 +29,7 @@ data class FeatureFlags(
 data class HealthResponse(val ok: Boolean = false)
 
 @Serializable
-data class LoginRequest(
-    val username: String,
-    val password: String,
-)
+data class LoginRequest(val username: String, val password: String)
 
 @Serializable
 data class UserMe(
@@ -42,10 +40,7 @@ data class UserMe(
 )
 
 @Serializable
-data class UserRef(
-    val id: Int,
-    val name: String,
-)
+data class UserRef(val id: Int, val name: String)
 
 @Serializable
 data class WorkSummary(
@@ -58,6 +53,7 @@ data class WorkSummary(
     val rating: String? = null,
     @SerialName("word_count") val wordCount: Int? = null,
     val chapters: Int = 0,
+    val fandoms: List<String> = emptyList(),
     @SerialName("added_by") val addedBy: UserRef? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("last_checked_at") val lastCheckedAt: String? = null,
@@ -73,6 +69,7 @@ data class WorkListResponse(
     val total: Int = 0,
     val limit: Int = 100,
     val offset: Int = 0,
+    val sites: List<String> = emptyList(),
 )
 
 @Serializable
@@ -84,6 +81,7 @@ data class ChapterSummary(
     @SerialName("imported_at") val importedAt: String? = null,
     @SerialName("imported_by") val importedBy: UserRef? = null,
     @SerialName("removed_from_source") val removedFromSource: Boolean = false,
+    @SerialName("comment_count") val commentCount: Int = 0,
 )
 
 @Serializable
@@ -91,19 +89,25 @@ data class WorkDetail(
     val id: Int,
     val title: String,
     val author: String? = null,
+    @SerialName("author_url") val authorUrl: String? = null,
     val site: String? = null,
     @SerialName("source_url") val sourceUrl: String? = null,
     val status: String? = null,
     val rating: String? = null,
+    val language: String? = null,
     @SerialName("word_count") val wordCount: Int? = null,
     val chapters: Int = 0,
     @SerialName("added_by") val addedBy: UserRef? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("published_at") val publishedAt: String? = null,
+    @SerialName("source_updated_at") val sourceUpdatedAt: String? = null,
     @SerialName("last_checked_at") val lastCheckedAt: String? = null,
     @SerialName("last_new_chapter_at") val lastNewChapterAt: String? = null,
     @SerialName("auto_update") val autoUpdate: Boolean = true,
     @SerialName("last_error") val lastError: String? = null,
     @SerialName("is_following") val isFollowing: Boolean = false,
+    @SerialName("can_manage") val canManage: Boolean = false,
+    @SerialName("comment_count") val commentCount: Int = 0,
     val fandoms: List<String> = emptyList(),
     val relationships: List<String> = emptyList(),
     val characters: List<String> = emptyList(),
@@ -121,18 +125,22 @@ data class ChapterContent(
     @SerialName("word_count") val wordCount: Int? = null,
     @SerialName("work_id") val workId: Int,
     @SerialName("work_title") val workTitle: String,
+    @SerialName("work_chapters") val workChapters: Int = 0,
     @SerialName("source_url") val sourceUrl: String? = null,
     @SerialName("content_html") val contentHtml: String = "",
     @SerialName("prev_number") val prevNumber: Int? = null,
     @SerialName("next_number") val nextNumber: Int? = null,
     @SerialName("removed_from_source") val removedFromSource: Boolean = false,
+    @SerialName("imported_at") val importedAt: String? = null,
+    @SerialName("imported_by") val importedBy: UserRef? = null,
+    @SerialName("comment_count") val commentCount: Int = 0,
 )
 
 @Serializable
-data class FollowResponse(
-    val ok: Boolean = true,
-    @SerialName("is_following") val isFollowing: Boolean,
-)
+data class FollowResponse(val ok: Boolean = true, @SerialName("is_following") val isFollowing: Boolean)
+
+@Serializable
+data class AutoUpdateResponse(val ok: Boolean = true, @SerialName("auto_update") val autoUpdate: Boolean)
 
 @Serializable
 data class ImportRequest(val urls: List<String>)
@@ -153,9 +161,72 @@ data class Job(
 )
 
 @Serializable
-data class ImportResponse(
+data class JobListResponse(
     val jobs: List<Job> = emptyList(),
-    val rejected: List<String> = emptyList(),
+    val total: Int = 0,
+    val limit: Int = 50,
+    val offset: Int = 0,
+)
+
+@Serializable
+data class ImportResponse(val jobs: List<Job> = emptyList(), val rejected: List<String> = emptyList())
+
+@Serializable
+data class ArchiveUser(
+    val id: Int,
+    val name: String,
+    val email: String? = null,
+    @SerialName("is_admin") val isAdmin: Boolean = false,
+    @SerialName("works_imported") val worksImported: Int = 0,
+    @SerialName("chapters_imported") val chaptersImported: Int = 0,
+    val following: Int = 0,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("last_login_at") val lastLoginAt: String? = null,
+)
+
+@Serializable
+data class UsersResponse(
+    val users: List<ArchiveUser> = emptyList(),
+    @SerialName("auto_updater_chapters") val autoUpdaterChapters: Int = 0,
+)
+
+@Serializable
+data class CommentItem(
+    val id: Int,
+    @SerialName("work_id") val workId: Int,
+    @SerialName("chapter_id") val chapterId: Int? = null,
+    @SerialName("parent_id") val parentId: Int? = null,
+    val body: String? = null,
+    val spoiler: Boolean = false,
+    val deleted: Boolean = false,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("edited_at") val editedAt: String? = null,
+    val user: UserRef? = null,
+    @SerialName("can_edit") val canEdit: Boolean = false,
+    @SerialName("can_delete") val canDelete: Boolean = false,
+    val replies: List<CommentItem> = emptyList(),
+)
+
+@Serializable
+data class CommentListResponse(
+    val comments: List<CommentItem> = emptyList(),
+    val count: Int = 0,
+)
+
+@Serializable
+data class CommentCreateRequest(
+    val body: String,
+    @SerialName("chapter_id") val chapterId: Int? = null,
+    @SerialName("parent_id") val parentId: Int? = null,
+    val spoiler: Boolean = false,
+)
+
+@Serializable
+data class NotificationSettings(
+    @SerialName("notify_email") val notifyEmail: Boolean = true,
+    @SerialName("notify_email_address") val notifyEmailAddress: String? = null,
+    @SerialName("discord_webhook_url") val discordWebhookUrl: String? = null,
+    @SerialName("apprise_urls") val appriseUrls: String? = null,
 )
 
 @Serializable

@@ -1,11 +1,15 @@
 package org.fanficarchive.android.data
 
+import android.webkit.CookieManager
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.HttpException
 import retrofit2.Retrofit
@@ -95,15 +99,43 @@ class ArchiveRepository(
         return user
     }
 
+    /** URL for in-app WebView SSO (or the general web login page). */
+    suspend fun browserLoginUrl(preferSso: Boolean): String {
+        val base = prefs.profile.first().baseUrl.trimEnd('/')
+        if (base.isBlank()) throw IllegalStateException("No server configured")
+        return if (preferSso) "$base/login/sso?next=/" else "$base/login?next=/"
+    }
+
+    /**
+     * After the WebView finishes OIDC (or web login), copy its cookies and confirm `/api/me`.
+     */
+    suspend fun completeBrowserLogin(): UserMe {
+        val base = prefs.profile.first().baseUrl
+        if (!cookieJar.importFromCookieManager(base)) {
+            throw IllegalStateException("Sign-in did not set a session cookie. Try again.")
+        }
+        val user = api().me()
+        prefs.setLoggedIn(true, user.name)
+        return user
+    }
+
+    private fun clearWebViewCookies() {
+        val manager = CookieManager.getInstance()
+        manager.removeAllCookies(null)
+        manager.flush()
+    }
+
     suspend fun logout() {
         runCatching { api().logout() }
         cookieJar.clear()
+        clearWebViewCookies()
         prefs.setLoggedIn(false)
     }
 
     suspend fun disconnect() {
         runCatching { api().logout() }
         cookieJar.clear()
+        clearWebViewCookies()
         api = null
         boundBaseUrl = null
         prefs.clearServer()
@@ -111,11 +143,23 @@ class ArchiveRepository(
 
     suspend fun me(): UserMe = api().me()
 
-    suspend fun listWorks(query: String = "", followedOnly: Boolean = false): WorkListResponse =
-        api().listWorks(
-            q = query.ifBlank { null },
-            followed = if (followedOnly) "1" else null,
-        )
+    suspend fun listWorks(
+        query: String = "",
+        site: String? = null,
+        status: String? = null,
+        followedOnly: Boolean = false,
+        addedBy: Int? = null,
+        offset: Int = 0,
+        limit: Int = 30,
+    ): WorkListResponse = api().listWorks(
+        q = query.ifBlank { null },
+        site = site?.ifBlank { null },
+        status = status?.ifBlank { null },
+        followed = if (followedOnly) "1" else null,
+        addedBy = addedBy,
+        limit = limit,
+        offset = offset,
+    )
 
     suspend fun getWork(id: Int): WorkDetail = api().getWork(id)
 
@@ -126,7 +170,64 @@ class ArchiveRepository(
 
     suspend fun checkUpdates(workId: Int): Job = api().check(workId)
 
+    suspend fun toggleAutoUpdate(workId: Int): AutoUpdateResponse = api().toggleAutoUpdate(workId)
+
+    suspend fun deleteWork(workId: Int): OkResponse = api().deleteWork(workId)
+
     suspend fun importUrls(urls: List<String>): ImportResponse = api().imports(ImportRequest(urls))
+
+    suspend fun listJobs(
+        kind: String? = null,
+        status: String? = null,
+        userId: Int? = null,
+        offset: Int = 0,
+    ): JobListResponse = api().jobs(kind = kind, status = status, userId = userId, offset = offset)
+
+    suspend fun listUsers(): UsersResponse = api().users()
+
+    suspend fun listComments(workId: Int, chapterId: Int? = null): CommentListResponse =
+        api().comments(workId, chapterId)
+
+    suspend fun postComment(
+        workId: Int,
+        body: String,
+        chapterId: Int? = null,
+        parentId: Int? = null,
+        spoiler: Boolean = false,
+    ): CommentItem = api().createComment(
+        workId,
+        CommentCreateRequest(body = body, chapterId = chapterId, parentId = parentId, spoiler = spoiler),
+    )
+
+    suspend fun removeComment(commentId: Int): OkResponse = api().deleteComment(commentId)
+
+    suspend fun getSettings(): NotificationSettings = api().getSettings()
+
+    suspend fun saveSettings(settings: NotificationSettings): NotificationSettings =
+        api().updateSettings(settings)
+
+    suspend fun epubUrl(workId: Int): String {
+        val base = prefs.profile.first().baseUrl.trimEnd('/')
+        return "$base/works/$workId/epub"
+    }
+
+    /** Download EPUB bytes using the authenticated cookie jar. */
+    suspend fun downloadEpub(workId: Int): Pair<String, ByteArray> {
+        val url = epubUrl(workId)
+        val request = Request.Builder().url(url).get().build()
+        return withContext(Dispatchers.IO) {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw IllegalStateException("EPUB download failed (${response.code})")
+                val bytes = response.body?.bytes() ?: throw IllegalStateException("Empty EPUB")
+                val name = response.header("Content-Disposition")
+                    ?.substringAfter("filename=", "")
+                    ?.trim('"', ' ')
+                    ?.ifBlank { null }
+                    ?: "work-$workId.epub"
+                name to bytes
+            }
+        }
+    }
 
     suspend fun saveReaderPrefs(fontScale: Float, theme: String) {
         prefs.saveReaderPrefs(fontScale, theme)

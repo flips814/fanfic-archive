@@ -1,19 +1,22 @@
 package org.fanficarchive.android.screens.library
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -21,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +41,8 @@ import org.fanficarchive.android.data.WorkSummary
 import org.fanficarchive.android.screens.components.EmptyState
 import org.fanficarchive.android.screens.components.ErrorText
 import org.fanficarchive.android.screens.components.LoadingBox
+import org.fanficarchive.android.screens.components.WorkCard
+import org.fanficarchive.android.screens.theme.siteLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,11 +50,14 @@ fun LibraryScreen(
     repository: ArchiveRepository,
     siteName: String,
     onOpenWork: (Int) -> Unit,
-    onImport: () -> Unit,
     onSettings: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
+    var site by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf("") }
     var followedOnly by remember { mutableStateOf(false) }
+    var showFilters by remember { mutableStateOf(false) }
+    var sites by remember { mutableStateOf<List<String>>(emptyList()) }
     var works by remember { mutableStateOf<List<WorkSummary>>(emptyList()) }
     var total by remember { mutableStateOf(0) }
     var loading by remember { mutableStateOf(true) }
@@ -59,28 +68,49 @@ fun LibraryScreen(
         scope.launch {
             loading = true
             error = null
-            runCatching { repository.listWorks(query, followedOnly) }
-                .onSuccess {
-                    works = it.works
-                    total = it.total
-                }
-                .onFailure { error = repository.errorMessage(it) }
+            runCatching {
+                repository.listWorks(
+                    query = query,
+                    site = site.ifBlank { null },
+                    status = status.ifBlank { null },
+                    followedOnly = followedOnly,
+                )
+            }.onSuccess {
+                works = it.works
+                total = it.total
+                if (it.sites.isNotEmpty()) sites = it.sites
+            }.onFailure { error = repository.errorMessage(it) }
             loading = false
         }
     }
 
-    LaunchedEffect(followedOnly) { refresh() }
+    LaunchedEffect(site, status, followedOnly) { refresh() }
+
+    val activeFilters = listOfNotNull(
+        site.ifBlank { null },
+        status.ifBlank { null },
+        if (followedOnly) "following" else null,
+    ).size
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(siteName.ifBlank { "Library" }) },
+                title = {
+                    Column {
+                        Text(siteName.ifBlank { "Library" })
+                        Text(
+                            "$total work${if (total == 1) "" else "s"}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
                 actions = {
+                    IconButton(onClick = { showFilters = !showFilters }) {
+                        Icon(Icons.Default.FilterList, contentDescription = "Filters")
+                    }
                     IconButton(onClick = { refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                    }
-                    IconButton(onClick = onImport) {
-                        Icon(Icons.Default.Add, contentDescription = "Import")
                     }
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
@@ -103,69 +133,77 @@ fun LibraryScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 trailingIcon = {
-                    Text(
-                        "Go",
-                        modifier = Modifier
-                            .padding(end = 12.dp)
-                            .clickable { refresh() },
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge,
-                    )
+                    TextButton(onClick = { refresh() }) { Text("Search") }
                 },
             )
-            FilterChip(
-                selected = followedOnly,
-                onClick = { followedOnly = !followedOnly },
-                label = { Text("Following") },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            when {
-                loading -> LoadingBox()
-                error != null -> ErrorText(error!!)
-                works.isEmpty() -> EmptyState("No works yet", "Import a story URL, or clear your filters.")
-                else -> LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+            if (showFilters || activeFilters > 0) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    item {
-                        Text(
-                            "$total work${if (total == 1) "" else "s"}",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = followedOnly,
+                            onClick = { followedOnly = !followedOnly },
+                            label = { Text("Following") },
+                        )
+                        FilterChip(
+                            selected = status == "complete",
+                            onClick = { status = if (status == "complete") "" else "complete" },
+                            label = { Text("Complete") },
+                        )
+                        FilterChip(
+                            selected = status == "ongoing",
+                            onClick = { status = if (status == "ongoing") "" else "ongoing" },
+                            label = { Text("In progress") },
                         )
                     }
-                    items(works, key = { it.id }) { work ->
-                        WorkRow(work = work, onClick = { onOpenWork(work.id) })
+                    if (sites.isNotEmpty()) {
+                        var expanded by remember { mutableStateOf(false) }
+                        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+                            OutlinedTextField(
+                                value = if (site.isBlank()) "All sites" else siteLabel(site),
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Site") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                                modifier = Modifier
+                                    .menuAnchor()
+                                    .fillMaxWidth(),
+                            )
+                            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                DropdownMenuItem(text = { Text("All sites") }, onClick = { site = ""; expanded = false })
+                                sites.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(siteLabel(option)) },
+                                        onClick = { site = option; expanded = false },
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun WorkRow(work: WorkSummary, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(work.title, style = MaterialTheme.typography.titleLarge)
-        Text(
-            listOfNotNull(
-                work.author,
-                work.site,
-                work.status,
-                "${work.chapters} ch",
-                work.wordCount?.let { "%,d words".format(it) },
-            ).joinToString(" · "),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (work.isFollowing) {
-            Text("Following", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            when {
+                loading -> LoadingBox()
+                error != null -> ErrorText(error!!)
+                works.isEmpty() -> EmptyState(
+                    "No works yet",
+                    if (query.isNotBlank() || activeFilters > 0) {
+                        "Nothing matched these filters."
+                    } else {
+                        "Import a story URL from Add works."
+                    },
+                )
+                else -> LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    items(works, key = { it.id }) { work ->
+                        WorkCard(work = work, onClick = { onOpenWork(work.id) })
+                    }
+                }
+            }
         }
     }
 }
