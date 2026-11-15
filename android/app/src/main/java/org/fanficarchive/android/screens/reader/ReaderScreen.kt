@@ -1,5 +1,6 @@
 package org.fanficarchive.android.screens.reader
 
+import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -16,7 +17,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -31,12 +34,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -46,11 +49,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -221,88 +229,145 @@ fun ReaderScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            AnimatedVisibility(
-                visible = chromeVisible,
-                enter = slideInVertically() + fadeIn(),
-                exit = slideOutVertically() + fadeOut(),
-            ) {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(chapter?.workTitle ?: "Reader", style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                            chapter?.let {
-                                Text(
-                                    "Chapter ${it.number} of ${it.workChapters}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            }
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to work")
-                        }
-                    },
-                )
+    // Overlay chrome instead of Scaffold topBar/bottomBar — AnimatedVisibility inside
+    // those slots does not reliably collapse, so bars stayed on screen.
+    val view = LocalView.current
+    DisposableEffect(chromeVisible) {
+        val window = (view.context as? Activity)?.window
+        if (window != null) {
+            val controller = WindowCompat.getInsetsController(window, view)
+            if (chromeVisible) {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+            } else {
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
-        },
-        bottomBar = {
-            AnimatedVisibility(
-                visible = chromeVisible && chapter != null,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-            ) {
-                val ch = chapter
-                if (ch != null) {
-                    Surface(tonalElevation = 2.dp) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            SecondaryButton(
-                                onClick = { ch.prevNumber?.let(onOpenChapter) },
-                                enabled = ch.prevNumber != null,
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                Icon(Icons.AutoMirrored.Filled.NavigateBefore, contentDescription = null)
-                                ButtonLabel("Prev")
-                            }
-                            SecondaryButton(
-                                onClick = { showContents = true },
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                ButtonLabel("Contents")
-                            }
-                            SecondaryButton(
-                                onClick = { ch.nextNumber?.let(onOpenChapter) },
-                                enabled = ch.nextNumber != null,
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                ButtonLabel("Next")
-                                Icon(Icons.AutoMirrored.Filled.NavigateNext, contentDescription = null)
-                            }
-                        }
+        }
+        onDispose {
+            val window = (view.context as? Activity)?.window ?: return@onDispose
+            WindowCompat.getInsetsController(window, view)
+                .show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        when {
+            loading -> LoadingBox()
+            error != null -> ErrorText(error!!)
+            chapter != null -> {
+                val ch = chapter!!
+                val minutes = max(1, ceil((ch.wordCount ?: 0) / 230.0).toInt())
+                val displayTitle = translated?.title?.takeIf { it.isNotBlank() } ?: ch.title
+                val displayHtml = translated?.contentHtml?.takeIf { it.isNotBlank() } ?: ch.contentHtml
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scroll)
+                        .padding(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .pointerInput(Unit) {
+                                detectTapGestures(onTap = { toggleChrome() })
+                            },
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(displayTitle, style = MaterialTheme.typography.headlineSmall)
+                        Text(
+                            listOfNotNull(
+                                "${formatNumber(ch.wordCount)} words",
+                                "about $minutes min",
+                                if (ch.commentCount > 0) "${ch.commentCount} comments" else null,
+                            ).joinToString(" · "),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
+                    // Panels keep their own taps; don't toggle chrome when using them.
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        TranslatePanel(
+                            repository = repository,
+                            enabled = translationEnabled,
+                            sourceLanguage = ch.workLanguageCode,
+                            preferredCode = readerPrefs.translateTo,
+                            onPreferredChange = { code ->
+                                scope.launch { repository.saveTranslateTo(code) }
+                            },
+                            onTranslated = { translated = it },
+                            request = { to -> repository.requestChapterTranslation(workId, chapterNumber, to) },
+                            poll = { to -> repository.getChapterTranslation(workId, chapterNumber, to) },
+                            onDone = { to ->
+                                ch.nextNumber?.let { next ->
+                                    runCatching { repository.requestChapterTranslation(workId, next, to) }
+                                }
+                            },
+                        )
+                        ReadingSettingsPanel(
+                            prefs = readerPrefs,
+                            onChange = { scale, theme ->
+                                scope.launch { repository.saveReaderPrefs(scale, theme) }
+                            },
+                        )
+                    }
+                    HtmlPane(
+                        html = displayHtml,
+                        baseUrl = baseUrl,
+                        fontScale = readerPrefs.fontScale,
+                        theme = readerPrefs.theme,
+                        wrapContentHeight = true,
+                        onContentHeightPx = { htmlHeightPx = it },
+                        onTap = { toggleChrome() },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+        }
+
+        AnimatedVisibility(
+            visible = chromeVisible,
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = slideInVertically() + fadeIn(),
+            exit = slideOutVertically() + fadeOut(),
         ) {
-            AnimatedVisibility(visible = chromeVisible) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Surface(tonalElevation = 3.dp, shadowElevation = 2.dp) {
+                    TopAppBar(
+                        modifier = Modifier.statusBarsPadding(),
+                        title = {
+                            Column {
+                                Text(
+                                    chapter?.workTitle ?: "Reader",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                )
+                                chapter?.let {
+                                    Text(
+                                        "Chapter ${it.number} of ${it.workChapters}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to work")
+                            }
+                        },
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(4.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .pointerInput(Unit) { detectTapGestures(onTap = { toggleChrome() }) },
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
                     Box(
                         modifier = Modifier
@@ -312,79 +377,46 @@ fun ReaderScreen(
                     )
                 }
             }
-            when {
-                loading -> LoadingBox()
-                error != null -> ErrorText(error!!)
-                chapter != null -> {
-                    val ch = chapter!!
-                    val minutes = max(1, ceil((ch.wordCount ?: 0) / 230.0).toInt())
-                    val displayTitle = translated?.title?.takeIf { it.isNotBlank() } ?: ch.title
-                    val displayHtml = translated?.contentHtml?.takeIf { it.isNotBlank() } ?: ch.contentHtml
-                    Column(
+        }
+
+        AnimatedVisibility(
+            visible = chromeVisible && chapter != null,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        ) {
+            val ch = chapter
+            if (ch != null) {
+                Surface(tonalElevation = 3.dp, shadowElevation = 2.dp) {
+                    Row(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(scroll)
-                            .padding(bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                .pointerInput(Unit) {
-                                    detectTapGestures(onTap = { toggleChrome() })
-                                },
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        SecondaryButton(
+                            onClick = { ch.prevNumber?.let(onOpenChapter) },
+                            enabled = ch.prevNumber != null,
+                            modifier = Modifier.weight(1f),
                         ) {
-                            Text(displayTitle, style = MaterialTheme.typography.headlineSmall)
-                            Text(
-                                listOfNotNull(
-                                    "${formatNumber(ch.wordCount)} words",
-                                    "about $minutes min",
-                                    if (ch.commentCount > 0) "${ch.commentCount} comments" else null,
-                                ).joinToString(" · "),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Icon(Icons.AutoMirrored.Filled.NavigateBefore, contentDescription = null)
+                            ButtonLabel("Prev")
                         }
-                        // Panels keep their own taps; don't toggle chrome when using them.
-                        Column(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        SecondaryButton(
+                            onClick = { showContents = true },
+                            modifier = Modifier.weight(1f),
                         ) {
-                            TranslatePanel(
-                                repository = repository,
-                                enabled = translationEnabled,
-                                sourceLanguage = ch.workLanguageCode,
-                                preferredCode = readerPrefs.translateTo,
-                                onPreferredChange = { code ->
-                                    scope.launch { repository.saveTranslateTo(code) }
-                                },
-                                onTranslated = { translated = it },
-                                request = { to -> repository.requestChapterTranslation(workId, chapterNumber, to) },
-                                poll = { to -> repository.getChapterTranslation(workId, chapterNumber, to) },
-                                onDone = { to ->
-                                    ch.nextNumber?.let { next ->
-                                        runCatching { repository.requestChapterTranslation(workId, next, to) }
-                                    }
-                                },
-                            )
-                            ReadingSettingsPanel(
-                                prefs = readerPrefs,
-                                onChange = { scale, theme ->
-                                    scope.launch { repository.saveReaderPrefs(scale, theme) }
-                                },
-                            )
+                            ButtonLabel("Contents")
                         }
-                        HtmlPane(
-                            html = displayHtml,
-                            baseUrl = baseUrl,
-                            fontScale = readerPrefs.fontScale,
-                            theme = readerPrefs.theme,
-                            wrapContentHeight = true,
-                            onContentHeightPx = { htmlHeightPx = it },
-                            onTap = { toggleChrome() },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                        SecondaryButton(
+                            onClick = { ch.nextNumber?.let(onOpenChapter) },
+                            enabled = ch.nextNumber != null,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            ButtonLabel("Next")
+                            Icon(Icons.AutoMirrored.Filled.NavigateNext, contentDescription = null)
+                        }
                     }
                 }
             }
