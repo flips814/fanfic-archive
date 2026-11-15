@@ -10,6 +10,9 @@ cryptography>=42
 httpx==0.27.*
 requests==2.32.*
 FanFicFare>=4.63
+ao3-api==2.3.*
+beautifulsoup4>=4.12
+lxml>=5.0
 apprise==1.9.*
 ebooklib==0.18
 nh3==0.2.*

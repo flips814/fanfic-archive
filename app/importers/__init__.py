@@ -1,9 +1,10 @@
+from app.importers.ao3 import Ao3Importer
 from app.importers.base import ChapterRef, Importer, ImportError_, WorkMeta, WorkSource
 from app.importers.fanficfare_importer import FanFicFareImporter
 from app.importers.tumblr import TumblrImporter
 
 # Order matters: specific importers before the FanFicFare catch-all.
-IMPORTERS: list[Importer] = [TumblrImporter(), FanFicFareImporter()]
+IMPORTERS: list[Importer] = [TumblrImporter(), Ao3Importer(), FanFicFareImporter()]
 
 SITE_LABELS = {
     "archiveofourown.org": "AO3",
