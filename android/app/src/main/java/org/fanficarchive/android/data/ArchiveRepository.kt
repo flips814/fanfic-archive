@@ -255,10 +255,15 @@ class ArchiveRepository(
         return prefs.getReadingProgress(base, workId)
     }
 
-    suspend fun saveReadingProgress(workId: Int, chapterNumber: Int, scrollOffset: Int) {
+    suspend fun saveReadingProgress(
+        workId: Int,
+        chapterNumber: Int,
+        scrollOffset: Int,
+        scrollFraction: Float = 0f,
+    ) {
         val base = prefs.profile.first().baseUrl
         if (base.isBlank()) return
-        prefs.saveReadingProgress(base, workId, chapterNumber, scrollOffset)
+        prefs.saveReadingProgress(base, workId, chapterNumber, scrollOffset, scrollFraction)
     }
 
     suspend fun clearReadingProgress(workId: Int) {

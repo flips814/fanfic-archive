@@ -31,11 +31,13 @@ data class ReaderPrefs(
     val translateTo: String = "",
 )
 
-/** Local bookmark: last chapter and scroll offset for a work on a given server. */
+/** Local bookmark: last chapter and scroll position for a work on a given server. */
 @Serializable
 data class ReadingProgress(
     val chapterNumber: Int,
     val scrollOffset: Int = 0,
+    /** 0..1 of the chapter page scroll; preferred for restore when content height changes. */
+    val scrollFraction: Float = 0f,
     val updatedAt: Long = System.currentTimeMillis(),
 )
 
@@ -132,13 +134,20 @@ class ServerPreferences(private val context: Context) {
         return all[progressKey(baseUrl, workId)]
     }
 
-    suspend fun saveReadingProgress(baseUrl: String, workId: Int, chapterNumber: Int, scrollOffset: Int) {
+    suspend fun saveReadingProgress(
+        baseUrl: String,
+        workId: Int,
+        chapterNumber: Int,
+        scrollOffset: Int,
+        scrollFraction: Float = 0f,
+    ) {
         val key = progressKey(baseUrl, workId)
         context.dataStore.edit { prefs ->
             val map = decodeProgressMap(prefs[readingProgressKey]).toMutableMap()
             map[key] = ReadingProgress(
                 chapterNumber = chapterNumber,
                 scrollOffset = scrollOffset.coerceAtLeast(0),
+                scrollFraction = scrollFraction.coerceIn(0f, 1f),
                 updatedAt = System.currentTimeMillis(),
             )
             prefs[readingProgressKey] = json.encodeToString(map)
