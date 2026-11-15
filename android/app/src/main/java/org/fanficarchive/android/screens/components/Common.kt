@@ -1,6 +1,7 @@
 package org.fanficarchive.android.screens.components
 
 import android.annotation.SuppressLint
+import android.view.MotionEvent
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
@@ -23,9 +24,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +38,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlin.math.abs
 import org.fanficarchive.android.data.WorkSummary
 import org.fanficarchive.android.screens.theme.JobDone
 import org.fanficarchive.android.screens.theme.JobFailed
@@ -331,12 +335,19 @@ fun HtmlPane(
     wrapContentHeight: Boolean = false,
     /** Tighter padding and UI sans font — for summaries that should match surrounding screens. */
     blendWithApp: Boolean = false,
+    onContentHeightPx: ((Int) -> Unit)? = null,
+    /** Fired on a quick tap (not a scroll drag). Used for immersive chrome toggle. */
+    onTap: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     val scheme = MaterialTheme.colorScheme
+    val latestOnTap by rememberUpdatedState(onTap)
     var contentHeightPx by remember(html, fontScale, theme, blendWithApp, scheme.background, scheme.onBackground) {
         mutableIntStateOf(0)
+    }
+    LaunchedEffect(contentHeightPx) {
+        if (contentHeightPx > 0) onContentHeightPx?.invoke(contentHeightPx)
     }
     val (bg, fg, link) = when {
         blendWithApp || theme == "app" -> Triple(
@@ -396,32 +407,50 @@ fun HtmlPane(
             webView.setBackgroundColor(android.graphics.Color.parseColor(bg))
             webView.settings.javaScriptEnabled = wrapContentHeight
             webView.isVerticalScrollBarEnabled = !wrapContentHeight
-            if (wrapContentHeight) {
-                // Let the Compose parent own vertical scrolling.
-                webView.setOnTouchListener { _, _ -> false }
-            } else {
-                webView.setOnTouchListener(null)
+            // Detect taps without blocking parent scroll (wrap-content chapters) or WebView scroll.
+            var downX = 0f
+            var downY = 0f
+            var downTime = 0L
+            webView.setOnTouchListener { _, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = event.x
+                        downY = event.y
+                        downTime = event.eventTime
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        val moved = abs(event.x - downX) > 24f || abs(event.y - downY) > 24f
+                        val quick = event.eventTime - downTime < 400
+                        if (!moved && quick) {
+                            latestOnTap?.invoke()
+                        }
+                    }
+                }
+                false
             }
             webView.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     if (!wrapContentHeight || view == null) return
                     view.post {
                         fun reportHeight() {
+                            val density = view.resources.displayMetrics.density
                             val fromContent = (view.contentHeight * view.scale).toInt()
-                            if (fromContent > 0 && fromContent != contentHeightPx) {
-                                contentHeightPx = fromContent
+                            // Prefer the larger of contentHeight and JS scrollHeight so tall chapters
+                            // finish laying out before reading-position restore runs.
+                            view.evaluateJavascript(
+                                "(function(){return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);})()",
+                            ) { value ->
+                                val css = value?.trim('"')?.toFloatOrNull()?.toInt() ?: 0
+                                val fromJs = if (css > 0) (css * density).toInt() else 0
+                                val px = maxOf(fromContent, fromJs).coerceAtLeast(1)
+                                if (px != contentHeightPx) contentHeightPx = px
                             }
                         }
                         reportHeight()
-                        view.postDelayed({ reportHeight() }, 150)
-                        view.postDelayed({ reportHeight() }, 450)
-                        view.evaluateJavascript(
-                            "(function(){return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);})()",
-                        ) { value ->
-                            val css = value?.trim('"')?.toFloatOrNull() ?: return@evaluateJavascript
-                            val px = (css * view.resources.displayMetrics.density).toInt().coerceAtLeast(1)
-                            if (px != contentHeightPx) contentHeightPx = px
-                        }
+                        view.postDelayed({ reportHeight() }, 100)
+                        view.postDelayed({ reportHeight() }, 300)
+                        view.postDelayed({ reportHeight() }, 700)
+                        view.postDelayed({ reportHeight() }, 1200)
                     }
                 }
             }

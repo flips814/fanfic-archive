@@ -1,7 +1,13 @@
 package org.fanficarchive.android.screens.reader
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -40,13 +47,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.ChapterContent
@@ -81,27 +87,53 @@ fun ReaderScreen(
     var translationEnabled by remember { mutableStateOf(false) }
     var translated by remember { mutableStateOf<TranslatedText?>(null) }
     var showContents by remember { mutableStateOf(false) }
-    var restoreOffset by remember { mutableIntStateOf(-1) }
+    var chromeVisible by remember { mutableStateOf(false) }
+    var restoreOffset by remember { mutableIntStateOf(0) }
+    var restoreFraction by remember { mutableStateOf(0f) }
+    var needsRestore by remember { mutableStateOf(false) }
     var restoreDone by remember { mutableStateOf(false) }
+    var htmlHeightPx by remember { mutableIntStateOf(0) }
     val readerPrefs by repository.readerPrefs.collectAsState(initial = ReaderPrefs())
     val scope = rememberCoroutineScope()
     val scroll = rememberScrollState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    fun toggleChrome() {
+        chromeVisible = !chromeVisible
+    }
+
+    suspend fun persistProgress(offset: Int = scroll.value, max: Int = scroll.maxValue) {
+        val fraction = if (max > 0) (offset.toFloat() / max).coerceIn(0f, 1f) else restoreFraction
+        repository.saveReadingProgress(workId, chapterNumber, offset.coerceAtLeast(0), fraction)
+    }
 
     LaunchedEffect(workId, chapterNumber) {
         loading = true
         error = null
         translated = null
         restoreDone = false
+        needsRestore = false
+        htmlHeightPx = 0
         scroll.scrollTo(0)
         val bookmark = repository.getReadingProgress(workId)
-        restoreOffset = if (bookmark?.chapterNumber == chapterNumber) bookmark.scrollOffset else 0
+        if (bookmark != null && bookmark.chapterNumber == chapterNumber) {
+            restoreOffset = bookmark.scrollOffset
+            restoreFraction = bookmark.scrollFraction
+            needsRestore = bookmark.scrollFraction > 0.001f || bookmark.scrollOffset > 0
+        } else {
+            restoreOffset = 0
+            restoreFraction = 0f
+            needsRestore = false
+        }
         runCatching { repository.getChapter(workId, chapterNumber) }
             .onSuccess { chapter = it }
             .onFailure { error = repository.errorMessage(it) }
-        // Bookmark the chapter immediately so Continue works even before scrolling.
-        repository.saveReadingProgress(workId, chapterNumber, restoreOffset.coerceAtLeast(0))
+        // Keep chapter bookmark, but do not clobber a saved in-chapter position with 0.
+        if (bookmark == null || bookmark.chapterNumber != chapterNumber) {
+            repository.saveReadingProgress(workId, chapterNumber, 0, 0f)
+        }
         loading = false
+        if (!needsRestore) restoreDone = true
     }
 
     LaunchedEffect(workId) {
@@ -114,38 +146,56 @@ fun ReaderScreen(
             .onSuccess { translationEnabled = it.features.translation }
     }
 
-    // Restore scroll once chapter content has laid out enough height.
-    LaunchedEffect(loading, chapter, restoreOffset) {
-        if (loading || chapter == null || restoreDone || restoreOffset < 0) return@LaunchedEffect
-        val target = restoreOffset
-        if (target == 0) {
-            restoreDone = true
-            return@LaunchedEffect
-        }
-        snapshotFlow { scroll.maxValue }
-            .filter { it > 0 }
-            .first()
-        // HtmlPane may grow after WebView measures; retry until we can reach the offset.
-        for (i in 0 until 8) {
+    // Restore after the chapter WebView has a stable laid-out height (not the 120dp placeholder).
+    LaunchedEffect(loading, chapter, needsRestore, htmlHeightPx) {
+        if (loading || chapter == null || restoreDone || !needsRestore) return@LaunchedEffect
+        if (htmlHeightPx < 200) return@LaunchedEffect
+
+        // Wait until scroll range stops growing so we don't restore against a short page.
+        var lastMax = -1
+        var stableTicks = 0
+        while (stableTicks < 4) {
             val max = scroll.maxValue
-            scroll.scrollTo(target.coerceIn(0, max))
-            if (max >= target) break
+            if (max > 0 && max == lastMax) stableTicks++ else stableTicks = 0
+            lastMax = max
             kotlinx.coroutines.delay(150)
         }
-        scroll.scrollTo(target.coerceIn(0, scroll.maxValue))
+        if (lastMax <= 0) return@LaunchedEffect
+
+        val target = when {
+            restoreFraction > 0.001f -> (restoreFraction * lastMax).toInt()
+            else -> restoreOffset
+        }.coerceIn(0, lastMax)
+
+        scroll.scrollTo(target)
+        // One more pass after late WebView growth.
+        kotlinx.coroutines.delay(250)
+        val finalMax = scroll.maxValue
+        val finalTarget = when {
+            restoreFraction > 0.001f -> (restoreFraction * finalMax).toInt()
+            else -> restoreOffset
+        }.coerceIn(0, finalMax)
+        scroll.scrollTo(finalTarget)
         restoreDone = true
+        needsRestore = false
     }
 
-    // Persist scroll position while reading.
+    // Persist scroll position while reading (never during restore — that was wiping bookmarks).
     LaunchedEffect(workId, chapterNumber) {
-        snapshotFlow { scroll.value }
-            .debounce(350)
-            .distinctUntilChanged()
-            .collect { offset ->
-                if (!loading && chapter != null && restoreDone) {
-                    repository.saveReadingProgress(workId, chapterNumber, offset)
+        try {
+            snapshotFlow { scroll.value to scroll.maxValue }
+                .debounce(400)
+                .distinctUntilChanged()
+                .collect { (offset, max) ->
+                    if (!loading && chapter != null && restoreDone && max > 0) {
+                        persistProgress(offset, max)
+                    }
                 }
+        } finally {
+            if (restoreDone && scroll.maxValue > 0) {
+                persistProgress()
             }
+        }
     }
 
     val progress = chapter?.let {
@@ -173,54 +223,69 @@ fun ReaderScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(chapter?.workTitle ?: "Reader", style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                        chapter?.let {
-                            Text(
-                                "Chapter ${it.number} of ${it.workChapters}",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
+            AnimatedVisibility(
+                visible = chromeVisible,
+                enter = slideInVertically() + fadeIn(),
+                exit = slideOutVertically() + fadeOut(),
+            ) {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(chapter?.workTitle ?: "Reader", style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                            chapter?.let {
+                                Text(
+                                    "Chapter ${it.number} of ${it.workChapters}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
                         }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to work")
-                    }
-                },
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to work")
+                        }
+                    },
+                )
+            }
         },
         bottomBar = {
-            chapter?.let { ch ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    SecondaryButton(
-                        onClick = { ch.prevNumber?.let(onOpenChapter) },
-                        enabled = ch.prevNumber != null,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.NavigateBefore, contentDescription = null)
-                        ButtonLabel("Prev")
-                    }
-                    SecondaryButton(
-                        onClick = { showContents = true },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        ButtonLabel("Contents")
-                    }
-                    SecondaryButton(
-                        onClick = { ch.nextNumber?.let(onOpenChapter) },
-                        enabled = ch.nextNumber != null,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        ButtonLabel("Next")
-                        Icon(Icons.AutoMirrored.Filled.NavigateNext, contentDescription = null)
+            AnimatedVisibility(
+                visible = chromeVisible && chapter != null,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            ) {
+                val ch = chapter
+                if (ch != null) {
+                    Surface(tonalElevation = 2.dp) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            SecondaryButton(
+                                onClick = { ch.prevNumber?.let(onOpenChapter) },
+                                enabled = ch.prevNumber != null,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.NavigateBefore, contentDescription = null)
+                                ButtonLabel("Prev")
+                            }
+                            SecondaryButton(
+                                onClick = { showContents = true },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                ButtonLabel("Contents")
+                            }
+                            SecondaryButton(
+                                onClick = { ch.nextNumber?.let(onOpenChapter) },
+                                enabled = ch.nextNumber != null,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                ButtonLabel("Next")
+                                Icon(Icons.AutoMirrored.Filled.NavigateNext, contentDescription = null)
+                            }
+                        }
                     }
                 }
             }
@@ -231,18 +296,21 @@ fun ReaderScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-            ) {
+            AnimatedVisibility(visible = chromeVisible) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(progress.coerceIn(0f, 1f))
+                        .fillMaxWidth()
                         .height(4.dp)
-                        .background(MaterialTheme.colorScheme.primary),
-                )
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .pointerInput(Unit) { detectTapGestures(onTap = { toggleChrome() }) },
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress.coerceIn(0f, 1f))
+                            .height(4.dp)
+                            .background(MaterialTheme.colorScheme.primary),
+                    )
+                }
             }
             when {
                 loading -> LoadingBox()
@@ -260,7 +328,11 @@ fun ReaderScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Column(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .pointerInput(Unit) {
+                                    detectTapGestures(onTap = { toggleChrome() })
+                                },
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text(displayTitle, style = MaterialTheme.typography.headlineSmall)
@@ -273,6 +345,12 @@ fun ReaderScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                        // Panels keep their own taps; don't toggle chrome when using them.
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             TranslatePanel(
                                 repository = repository,
                                 enabled = translationEnabled,
@@ -303,6 +381,8 @@ fun ReaderScreen(
                             fontScale = readerPrefs.fontScale,
                             theme = readerPrefs.theme,
                             wrapContentHeight = true,
+                            onContentHeightPx = { htmlHeightPx = it },
+                            onTap = { toggleChrome() },
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
