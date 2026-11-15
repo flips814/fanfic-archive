@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import notify, settings_store, translate
+from app.access import visible_jobs_clause, visible_works_clause
 from app.auth import configure_oauth, require_admin
 from app.config import FIELDS, SECTIONS, settings
 from app.db import get_db
@@ -158,11 +159,29 @@ def admin_overview(request: Request, db: Session = Depends(get_db), user: User =
         failed_week=db.scalar(select(func.count(ImportJob.id)).where(
             ImportJob.status == "failed", ImportJob.created_at >= week_ago)),
     )
-    failed = db.scalars(select(ImportJob).where(ImportJob.status == "failed", ImportJob.created_at >= week_ago)
-                        .order_by(ImportJob.created_at.desc()).limit(20)).all()
-    queued = db.scalars(select(ImportJob).where(ImportJob.status.in_(PENDING))
-                        .order_by(ImportJob.created_at).limit(20)).all()
-    errored_works = db.scalars(select(Work).where(Work.last_error.is_not(None)).order_by(Work.title)).all()
+    failed = db.scalars(
+        select(ImportJob)
+        .outerjoin(Work, ImportJob.work_id == Work.id)
+        .where(
+            ImportJob.status == "failed",
+            ImportJob.created_at >= week_ago,
+            visible_jobs_clause(user),
+        )
+        .order_by(ImportJob.created_at.desc())
+        .limit(20)
+    ).all()
+    queued = db.scalars(
+        select(ImportJob)
+        .outerjoin(Work, ImportJob.work_id == Work.id)
+        .where(ImportJob.status.in_(PENDING), visible_jobs_clause(user))
+        .order_by(ImportJob.created_at)
+        .limit(20)
+    ).all()
+    errored_works = db.scalars(
+        select(Work)
+        .where(Work.last_error.is_not(None), visible_works_clause(user))
+        .order_by(Work.title)
+    ).all()
     return _render(request, "admin/overview.html", user, checklist=_checklist(db), stats=stats,
                    failed=failed, queued=queued, errored_works=errored_works, admin_section="overview")
 
@@ -402,7 +421,11 @@ def admin_cancel_job(request: Request, job_id: int, db: Session = Depends(get_db
 
 @router.post("/admin/jobs/check-all")
 def admin_check_all(request: Request, db: Session = Depends(get_db), user: User = Depends(require_admin)):
-    count = sum(1 for work in db.scalars(select(Work)) if enqueue_update(db, work, user) is not None)
+    count = sum(
+        1
+        for work in db.scalars(select(Work).where(visible_works_clause(user)))
+        if enqueue_update(db, work, user) is not None
+    )
     db.commit()
     _flash(request, f"Queued update checks for {count} work(s).")
     return _back("/admin")

@@ -140,6 +140,21 @@ button.link {
 [data-theme="dark"] .pill-ongoing { color: #ffb74d; border-color: #ffb74d; }
 .pill-following { border-color: var(--pico-primary); color: var(--pico-primary); }
 .pill-following .icon, button[aria-pressed="true"] .icon { fill: currentColor; }
+.pill-private { border-color: #6a1b9a; color: #4a148c; }
+[data-theme="dark"] .pill-private { color: #ce93d8; border-color: #ce93d8; }
+
+.visibility-fieldset {
+  margin: 1rem 0 1.25rem;
+  padding: .85rem 1rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+}
+.visibility-fieldset legend { padding: 0 .35rem; font-weight: 600; }
+.radio-row {
+  display: flex; align-items: flex-start; gap: .6rem;
+  margin: .45rem 0; cursor: pointer;
+}
+.radio-row input { margin-top: .2rem; }
 .pill-new { background: var(--pico-primary-background); color: var(--pico-primary-inverse); border-color: transparent; }
 .pill-removed { color: var(--pico-del-color); border-color: var(--pico-del-color); }
 .job-done { background: #2e7d32; color: #fff; border-color: transparent; }

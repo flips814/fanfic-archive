@@ -90,6 +90,8 @@ class Work(Base):
     source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     added_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    # "public" = every logged-in user; "private" = only the importer (added_by_id).
+    visibility: Mapped[str] = mapped_column(String(20), default="public", server_default=text("'public'"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     last_new_chapter_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -105,6 +107,10 @@ class Work(Base):
     )
     followers: Mapped[list["Follow"]] = relationship(back_populates="work", cascade="all, delete-orphan")
     translations: Mapped[list["WorkTranslation"]] = relationship(back_populates="work", cascade="all, delete-orphan")
+
+    @property
+    def is_private(self) -> bool:
+        return self.visibility == "private"
 
     @property
     def is_complete(self) -> bool:
@@ -237,6 +243,8 @@ class ImportJob(Base):
     work_id: Mapped[int | None] = mapped_column(ForeignKey("works.id", ondelete="SET NULL"), index=True)
     work_title: Mapped[str | None] = mapped_column(String(1000))
     requested_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    # Intended visibility for new imports ("public" | "private"); ignored for updates.
+    visibility: Mapped[str] = mapped_column(String(20), default="public", server_default=text("'public'"))
     status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
     message: Mapped[str | None] = mapped_column(Text)
     chapters_added: Mapped[int] = mapped_column(Integer, default=0)

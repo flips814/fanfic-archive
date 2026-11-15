@@ -206,7 +206,13 @@ class ArchiveRepository(
 
     suspend fun deleteWork(workId: Int): OkResponse = api().deleteWork(workId)
 
-    suspend fun importUrls(urls: List<String>): ImportResponse = api().imports(ImportRequest(urls))
+    suspend fun setVisibility(workId: Int, visibility: String): VisibilityUpdateResponse =
+        api().setVisibility(workId, VisibilityUpdateRequest(visibility))
+
+    suspend fun importUrls(
+        urls: List<String>,
+        visibility: String = VISIBILITY_PUBLIC,
+    ): ImportResponse = api().imports(ImportRequest(urls = urls, visibility = visibility))
 
     suspend fun listJobs(
         kind: String? = null,

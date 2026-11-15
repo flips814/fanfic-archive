@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.access import can_view
 from app.auth import current_user
 from app.config import settings
 from app.db import SessionLocal, get_db
@@ -399,7 +400,10 @@ def _require_enabled() -> None:
         raise HTTPException(404, "Translation is turned off on this archive.")
 
 
-def _chapter(db: Session, work_id: int, number: int) -> Chapter:
+def _chapter(db: Session, work_id: int, number: int, user: User) -> Chapter:
+    work = db.get(Work, work_id)
+    if work is None or not can_view(user, work):
+        raise HTTPException(404, "Work not found")
     chapter = db.scalar(select(Chapter).where(Chapter.work_id == work_id, Chapter.number == number)
                         .order_by(Chapter.id).limit(1))
     if chapter is None:
@@ -428,7 +432,7 @@ def list_languages(source: str = "", user: User = Depends(current_user)):
 def get_translation(work_id: int, number: int, to: str, db: Session = Depends(get_db),
                     user: User = Depends(current_user)):
     _require_enabled()
-    chapter = _chapter(db, work_id, number)
+    chapter = _chapter(db, work_id, number, user)
     return status(_find(db, chapter, to), chapter)
 
 
@@ -436,7 +440,7 @@ def get_translation(work_id: int, number: int, to: str, db: Session = Depends(ge
 def request_translation(work_id: int, number: int, background: BackgroundTasks, to: str = Form(...),
                         db: Session = Depends(get_db), user: User = Depends(current_user)):
     _require_enabled()
-    chapter = _chapter(db, work_id, number)
+    chapter = _chapter(db, work_id, number, user)
     try:
         target = find_language(to, languages())
     except TranslateError as e:
@@ -449,9 +453,9 @@ def request_translation(work_id: int, number: int, background: BackgroundTasks, 
     return status(t, chapter)
 
 
-def _work(db: Session, work_id: int) -> Work:
+def _work(db: Session, work_id: int, user: User) -> Work:
     work = db.get(Work, work_id)
-    if work is None:
+    if work is None or not can_view(user, work):
         raise HTTPException(404, "Work not found")
     return work
 
@@ -459,7 +463,7 @@ def _work(db: Session, work_id: int) -> Work:
 @router.get("/works/{work_id}/translation")
 def get_work_translation(work_id: int, to: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _require_enabled()
-    work = _work(db, work_id)
+    work = _work(db, work_id, user)
     return work_status(_find_work(db, work, to), work)
 
 
@@ -467,7 +471,7 @@ def get_work_translation(work_id: int, to: str, db: Session = Depends(get_db), u
 def request_work_translation(work_id: int, to: str = Form(...), db: Session = Depends(get_db),
                              user: User = Depends(current_user)):
     _require_enabled()
-    work = _work(db, work_id)
+    work = _work(db, work_id, user)
     try:
         target = find_language(to, languages())
     except TranslateError as e:

@@ -8,11 +8,21 @@ from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Requ
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import admin, api, auth, comments, notify, settings_store, translate
+from app.access import (
+    VISIBILITY_PRIVATE,
+    VISIBILITY_PUBLIC,
+    can_view,
+    can_view_job,
+    normalize_visibility,
+    prune_followers_for_privacy,
+    visible_jobs_clause,
+    visible_works_clause,
+)
 from app.auth import NotAuthenticated, current_user, current_user_optional
 from app.config import settings
 from app.db import SessionLocal, get_db, init_db
@@ -176,9 +186,9 @@ def _int_or_none(value: str) -> int | None:
         return None
 
 
-def _get_work(db: Session, work_id: int) -> Work:
+def _get_work(db: Session, work_id: int, user: User) -> Work:
     work = db.get(Work, work_id)
-    if not work:
+    if not work or not can_view(user, work):
         raise HTTPException(404, "Work not found")
     return work
 
@@ -213,7 +223,7 @@ def library(
     chapter_count = (
         select(func.count(Chapter.id)).where(Chapter.work_id == Work.id).correlate(Work).scalar_subquery()
     )
-    query = select(Work, chapter_count.label("chapter_count"))
+    query = select(Work, chapter_count.label("chapter_count")).where(visible_works_clause(user))
     if q:
         like = f"%{q}%"
         query = query.where(or_(Work.title.ilike(like), Work.author.ilike(like)))
@@ -235,7 +245,9 @@ def library(
         .limit(PAGE_SIZE)
     ).all()
     followed = set(db.scalars(select(Follow.work_id).where(Follow.user_id == user.id)))
-    sites = db.scalars(select(Work.site).distinct().order_by(Work.site)).all()
+    sites = db.scalars(
+        select(Work.site).where(visible_works_clause(user)).distinct().order_by(Work.site)
+    ).all()
     users = db.scalars(select(User).order_by(User.display_name)).all()
     return render(
         request,
@@ -261,10 +273,12 @@ def add_form(request: Request, user: User = Depends(current_user)):
 def add_submit(
     request: Request,
     urls: str = Form(...),
+    visibility: str = Form(VISIBILITY_PUBLIC),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    queued, rejected = 0, []
+    visibility = normalize_visibility(visibility)
+    queued, rejected, blocked = 0, [], 0
     for line in urls.splitlines():
         url = line.strip()
         if not url:
@@ -272,11 +286,16 @@ def add_submit(
         if not is_supported(url):
             rejected.append(url)
             continue
-        enqueue_import(db, url, user)
-        queued += 1
+        job = enqueue_import(db, url, user, visibility=visibility)
+        if job.status == "failed":
+            blocked += 1
+            flash(request, job.message or "Couldn't add that story.")
+        else:
+            queued += 1
     db.commit()
     if queued:
-        flash(request, f"Queued {queued} import(s). They will appear in the library shortly.")
+        scope = "privately" if visibility == VISIBILITY_PRIVATE else "to the shared library"
+        flash(request, f"Queued {queued} import(s) {scope}. They will appear shortly.")
     for url in rejected:
         flash(request, f"Unsupported URL skipped: {url}")
     return RedirectResponse("/activity?user_id=%d" % user.id, status_code=303)
@@ -286,7 +305,7 @@ def add_submit(
 def work_detail(
     request: Request, work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    work = _get_work(db, work_id)
+    work = _get_work(db, work_id, user)
     jobs = db.scalars(
         select(ImportJob).where(ImportJob.work_id == work.id).order_by(ImportJob.created_at.desc()).limit(25)
     ).all()
@@ -307,7 +326,7 @@ def work_detail(
 
 @app.post("/works/{work_id}/follow")
 def work_follow(request: Request, work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    follow(db, user, _get_work(db, work_id))
+    follow(db, user, _get_work(db, work_id, user))
     db.commit()
     flash(request, "You'll be notified when new chapters are imported.")
     return RedirectResponse(f"/works/{work_id}", status_code=303)
@@ -315,6 +334,7 @@ def work_follow(request: Request, work_id: int, db: Session = Depends(get_db), u
 
 @app.post("/works/{work_id}/unfollow")
 def work_unfollow(request: Request, work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _get_work(db, work_id, user)
     existing = db.get(Follow, (user.id, work_id))
     if existing:
         db.delete(existing)
@@ -324,7 +344,7 @@ def work_unfollow(request: Request, work_id: int, db: Session = Depends(get_db),
 
 @app.post("/works/{work_id}/check")
 def work_check(request: Request, work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    enqueue_update(db, _get_work(db, work_id), user)
+    enqueue_update(db, _get_work(db, work_id, user), user)
     db.commit()
     flash(request, "Update check queued.")
     return RedirectResponse(f"/works/{work_id}", status_code=303)
@@ -332,7 +352,7 @@ def work_check(request: Request, work_id: int, db: Session = Depends(get_db), us
 
 @app.post("/works/{work_id}/auto-update")
 def work_toggle_auto(request: Request, work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    work = _get_work(db, work_id)
+    work = _get_work(db, work_id, user)
     if not (user.is_admin or work.added_by_id == user.id):
         raise HTTPException(403)
     work.auto_update = not work.auto_update
@@ -340,9 +360,32 @@ def work_toggle_auto(request: Request, work_id: int, db: Session = Depends(get_d
     return RedirectResponse(f"/works/{work_id}", status_code=303)
 
 
+@app.post("/works/{work_id}/visibility")
+def work_set_visibility(
+    request: Request,
+    work_id: int,
+    visibility: str = Form(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    work = _get_work(db, work_id, user)
+    if work.added_by_id != user.id and not user.is_admin:
+        raise HTTPException(403)
+    work.visibility = normalize_visibility(visibility)
+    prune_followers_for_privacy(work)
+    db.commit()
+    flash(
+        request,
+        "This work is now private — only you can see it."
+        if work.is_private
+        else "This work is now public — everyone on the server can see it.",
+    )
+    return RedirectResponse(f"/works/{work_id}", status_code=303)
+
+
 @app.post("/works/{work_id}/delete")
 def work_delete(request: Request, work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    work = _get_work(db, work_id)
+    work = _get_work(db, work_id, user)
     if not (user.is_admin or work.added_by_id == user.id):
         raise HTTPException(403)
     flash(request, f"Deleted “{work.title}”.")
@@ -353,7 +396,7 @@ def work_delete(request: Request, work_id: int, db: Session = Depends(get_db), u
 
 @app.get("/works/{work_id}/epub")
 def work_epub(work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    filename, data = build_epub(_get_work(db, work_id))
+    filename, data = build_epub(_get_work(db, work_id, user))
     return Response(
         data,
         media_type="application/epub+zip",
@@ -365,7 +408,7 @@ def work_epub(work_id: int, db: Session = Depends(get_db), user: User = Depends(
 def read_chapter(
     request: Request, work_id: int, number: int, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    work = _get_work(db, work_id)
+    work = _get_work(db, work_id, user)
     chapters = work.chapters
     index = next((i for i, c in enumerate(chapters) if c.number == number), None)
     if index is None:
@@ -403,7 +446,7 @@ def comment_create(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    work = _get_work(db, work_id)
+    work = _get_work(db, work_id, user)
     chapter = db.get(Chapter, _int_or_none(chapter_id)) if chapter_id else None
     if chapter is not None and chapter.work_id != work.id:
         raise HTTPException(404, "Chapter not found")
@@ -489,7 +532,9 @@ def activity(
     user: User = Depends(current_user),
 ):
     user_id = _int_or_none(user_id)
-    query = select(ImportJob)
+    query = select(ImportJob).outerjoin(Work, ImportJob.work_id == Work.id).where(
+        visible_jobs_clause(user)
+    )
     if user_id == 0:
         query = query.where(ImportJob.requested_by_id.is_(None))
     elif user_id:
@@ -518,7 +563,17 @@ def activity(
 @app.get("/users")
 def users_page(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)):
     works_added = (
-        select(func.count(Work.id)).where(Work.added_by_id == User.id).correlate(User).scalar_subquery()
+        select(func.count(Work.id))
+        .where(
+            Work.added_by_id == User.id,
+            or_(
+                Work.visibility != VISIBILITY_PRIVATE,
+                Work.visibility.is_(None),
+                Work.added_by_id == user.id,
+            ),
+        )
+        .correlate(User)
+        .scalar_subquery()
     )
     chapters_imported = (
         select(func.count(Chapter.id)).where(Chapter.imported_by_id == User.id).correlate(User).scalar_subquery()

@@ -35,6 +35,7 @@ import org.fanficarchive.android.screens.components.FanficCard
 import org.fanficarchive.android.screens.components.FilterTag
 import org.fanficarchive.android.screens.components.JobStatusPill
 import org.fanficarchive.android.screens.components.LoadingBox
+import org.fanficarchive.android.screens.components.PrivatePill
 import org.fanficarchive.android.screens.components.relativeTime
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,7 +78,7 @@ fun ActivityScreen(
                     Column {
                         Text("Activity")
                         Text(
-                            "$total job${if (total == 1) "" else "s"}",
+                            "$total job${if (total == 1) "" else "s"} · private imports stay on your list only",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -136,6 +137,7 @@ fun ActivityScreen(
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.primary,
                                 )
+                                if (job.isPrivate) PrivatePill()
                             }
                             Text(
                                 job.workTitle ?: job.url ?: "Job #${job.id}",

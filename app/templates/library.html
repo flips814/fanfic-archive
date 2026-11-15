@@ -74,6 +74,7 @@
       <div class="card-badges">
         {{ site_badge(work.site) }}
         {{ status_pill(work.status) }}
+        {% if work.is_private %}<span class="pill pill-private">Private</span>{% endif %}
         {% if work.id in followed %}<span class="pill pill-following">{{ icon("star") }} Following</span>{% endif %}
       </div>
       <h2 class="card-title"><a href="/works/{{ work.id }}">{{ work.title }}</a></h2>

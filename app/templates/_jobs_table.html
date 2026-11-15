@@ -18,10 +18,14 @@
   </thead>
   <tbody role="rowgroup">
   {% for job in jobs %}
+    {% set job_private = (job.work and job.work.is_private) or (not job.work_id and job.visibility == "private") %}
     <tr role="row">
       <td role="cell" data-label="When" class="nowrap">{{ when(job.created_at) }}</td>
       <td role="cell" data-label="Who" class="nowrap">{{ who(job.requested_by) }}</td>
-      <td role="cell" data-label="Action" class="nowrap">{{ "Import" if job.kind == "import" else "Update check" }}</td>
+      <td role="cell" data-label="Action" class="nowrap">
+        {{ "Import" if job.kind == "import" else "Update check" }}
+        {% if job_private %}<span class="pill pill-private">Private</span>{% endif %}
+      </td>
       {% if show_work %}
       <td role="cell" data-label="Work" class="stack-title">
         {% if job.work_id %}<a href="/works/{{ job.work_id }}">{{ job.work_title or job.url }}</a>

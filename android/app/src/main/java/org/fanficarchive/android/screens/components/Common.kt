@@ -168,6 +168,27 @@ fun FollowingPill(modifier: Modifier = Modifier) {
 }
 
 @Composable
+fun PrivatePill(modifier: Modifier = Modifier) {
+    val color = Color(0xFF6A1B9A)
+    MetaChip(
+        text = "Private",
+        modifier = modifier,
+        foreground = color,
+        border = color,
+    )
+}
+
+@Composable
+fun PublicPill(modifier: Modifier = Modifier) {
+    MetaChip(
+        text = "Public",
+        modifier = modifier,
+        foreground = MaterialTheme.colorScheme.onSurfaceVariant,
+        border = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+    )
+}
+
+@Composable
 fun JobStatusPill(status: String, modifier: Modifier = Modifier) {
     val (bg, fg) = when (status) {
         "done" -> JobDone to Color.White
@@ -232,6 +253,7 @@ fun WorkCard(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             SiteBadge(work.site)
             StatusPill(work.status)
+            if (work.isPrivate) PrivatePill()
             if (work.isFollowing) FollowingPill()
             if (resumeChapter != null) {
                 MetaChip(

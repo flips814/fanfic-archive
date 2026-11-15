@@ -2,6 +2,7 @@ package org.fanficarchive.android.screens.importing
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,10 +28,14 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.ImportResponse
+import org.fanficarchive.android.data.VISIBILITY_PRIVATE
+import org.fanficarchive.android.data.VISIBILITY_PUBLIC
 import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.FanficTextField
+import org.fanficarchive.android.screens.components.FilterTag
 import org.fanficarchive.android.screens.components.JobStatusPill
 import org.fanficarchive.android.screens.components.PrimaryButton
+import org.fanficarchive.android.screens.components.PrivatePill
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +44,7 @@ fun ImportScreen(
     onBack: (() -> Unit)? = null,
 ) {
     var urlsText by remember { mutableStateOf("") }
+    var visibility by remember { mutableStateOf(VISIBILITY_PUBLIC) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var result by remember { mutableStateOf<ImportResponse?>(null) }
@@ -89,6 +95,33 @@ fun ImportScreen(
                 minLines = 8,
                 modifier = Modifier.fillMaxWidth(),
             )
+            Text("Visibility", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Applies to every URL in this import.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterTag(
+                    label = "Public",
+                    selected = visibility == VISIBILITY_PUBLIC,
+                    onClick = { visibility = VISIBILITY_PUBLIC },
+                )
+                FilterTag(
+                    label = "Private",
+                    selected = visibility == VISIBILITY_PRIVATE,
+                    onClick = { visibility = VISIBILITY_PRIVATE },
+                )
+            }
+            Text(
+                if (visibility == VISIBILITY_PRIVATE) {
+                    "Only you can find and read these stories."
+                } else {
+                    "Everyone on this server can find and read these stories."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             PrimaryButton(
                 onClick = {
                     val urls = urlsText.lines().map { it.trim() }.filter { it.isNotEmpty() }
@@ -100,7 +133,7 @@ fun ImportScreen(
                         loading = true
                         error = null
                         result = null
-                        runCatching { repository.importUrls(urls) }
+                        runCatching { repository.importUrls(urls, visibility) }
                             .onSuccess { result = it }
                             .onFailure { error = repository.errorMessage(it) }
                         loading = false
@@ -114,13 +147,17 @@ fun ImportScreen(
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             result?.let { response ->
                 Text(
-                    "Queued ${response.jobs.size} job${if (response.jobs.size == 1) "" else "s"}.",
+                    "Queued ${response.jobs.size} job${if (response.jobs.size == 1) "" else "s"}" +
+                        if (visibility == VISIBILITY_PRIVATE) " as private." else ".",
                     color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.titleMedium,
                 )
                 response.jobs.forEach { job ->
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        JobStatusPill(job.status)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            JobStatusPill(job.status)
+                            if (job.isPrivate) PrivatePill()
+                        }
                         Text(job.url.orEmpty(), style = MaterialTheme.typography.bodyMedium)
                     }
                 }

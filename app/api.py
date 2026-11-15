@@ -1,9 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app import comments, translate
+from app.access import (
+    VISIBILITY_PRIVATE,
+    VISIBILITY_PUBLIC,
+    can_view,
+    can_view_job,
+    normalize_visibility,
+    prune_followers_for_privacy,
+    visible_jobs_clause,
+    visible_works_clause,
+)
 from app.auth import (
     authenticate_local,
     current_user,
@@ -23,6 +33,7 @@ API_VERSION = 1
 
 class ImportRequest(BaseModel):
     urls: list[str]
+    visibility: str = VISIBILITY_PUBLIC
 
 
 class LoginRequest(BaseModel):
@@ -100,6 +111,7 @@ def _work(
         "last_checked_at": w.last_checked_at,
         "last_new_chapter_at": w.last_new_chapter_at,
         "auto_update": w.auto_update,
+        "visibility": w.visibility or VISIBILITY_PUBLIC,
         "last_error": w.last_error,
         "fandoms": w.fandoms or [],
     }
@@ -139,6 +151,7 @@ def _job(j: ImportJob) -> dict:
         "work_id": j.work_id,
         "work_title": j.work_title,
         "requested_by": _user(j.requested_by),
+        "visibility": j.visibility or VISIBILITY_PUBLIC,
         "status": j.status,
         "message": j.message,
         "chapters_added": j.chapters_added,
@@ -168,9 +181,9 @@ def _comment(c: Comment, viewer: User, include_replies: bool = True) -> dict:
     }
 
 
-def _get_work(db: Session, work_id: int) -> Work:
+def _get_work(db: Session, work_id: int, user: User) -> Work:
     work = db.get(Work, work_id)
-    if not work:
+    if not work or not can_view(user, work):
         raise HTTPException(404, "Not Found")
     return work
 
@@ -237,7 +250,7 @@ def list_works(
 ):
     limit = min(max(limit, 1), 500)
     offset = max(offset, 0)
-    query = select(Work)
+    query = select(Work).where(visible_works_clause(user))
     if q:
         like = f"%{q}%"
         query = query.where(or_(Work.title.ilike(like), Work.author.ilike(like)))
@@ -261,7 +274,9 @@ def list_works(
         .limit(limit)
     ).all()
     followed_ids = set(db.scalars(select(Follow.work_id).where(Follow.user_id == user.id)))
-    sites = db.scalars(select(Work.site).distinct().order_by(Work.site)).all()
+    sites = db.scalars(
+        select(Work.site).where(visible_works_clause(user)).distinct().order_by(Work.site)
+    ).all()
     return {
         "works": [_work(w, is_following=w.id in followed_ids) for w in works],
         "total": total,
@@ -273,7 +288,7 @@ def list_works(
 
 @router.get("/works/{work_id}")
 def get_work(work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    work = _get_work(db, work_id)
+    work = _get_work(db, work_id, user)
     work_comments = comments.thread(db, work.id, None)
     return _work(
         work,
@@ -289,7 +304,7 @@ def get_work(work_id: int, db: Session = Depends(get_db), user: User = Depends(c
 def get_chapter(
     work_id: int, number: int, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    work = _get_work(db, work_id)
+    work = _get_work(db, work_id, user)
     chapters = work.chapters
     index = next((i for i, c in enumerate(chapters) if c.number == number), None)
     if index is None:
@@ -313,7 +328,7 @@ def get_chapter(
 
 @router.post("/works/{work_id}/follow")
 def follow_work(work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    work = _get_work(db, work_id)
+    work = _get_work(db, work_id, user)
     follow(db, user, work)
     db.commit()
     return {"ok": True, "is_following": True}
@@ -330,7 +345,7 @@ def unfollow_work(work_id: int, db: Session = Depends(get_db), user: User = Depe
 
 @router.post("/works/{work_id}/check")
 def check_work(work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    work = _get_work(db, work_id)
+    work = _get_work(db, work_id, user)
     job = enqueue_update(db, work, user)
     db.commit()
     return _job(job)
@@ -338,7 +353,7 @@ def check_work(work_id: int, db: Session = Depends(get_db), user: User = Depends
 
 @router.post("/works/{work_id}/auto-update")
 def toggle_auto_update(work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    work = _get_work(db, work_id)
+    work = _get_work(db, work_id, user)
     if not (user.is_admin or work.added_by_id == user.id):
         raise HTTPException(403, "Only the importer or an admin can change auto-update.")
     work.auto_update = not work.auto_update
@@ -348,7 +363,7 @@ def toggle_auto_update(work_id: int, db: Session = Depends(get_db), user: User =
 
 @router.delete("/works/{work_id}")
 def delete_work(work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    work = _get_work(db, work_id)
+    work = _get_work(db, work_id, user)
     if not (user.is_admin or work.added_by_id == user.id):
         raise HTTPException(403, "Only the importer or an admin can delete this work.")
     title = work.title
@@ -357,12 +372,30 @@ def delete_work(work_id: int, db: Session = Depends(get_db), user: User = Depend
     return {"ok": True, "title": title}
 
 
+class VisibilityUpdate(BaseModel):
+    visibility: str
+
+
+@router.post("/works/{work_id}/visibility")
+def set_visibility(
+    work_id: int, body: VisibilityUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    work = _get_work(db, work_id, user)
+    if work.added_by_id != user.id and not user.is_admin:
+        raise HTTPException(403, "Only the importer or an admin can change visibility.")
+    work.visibility = normalize_visibility(body.visibility)
+    prune_followers_for_privacy(work)
+    db.commit()
+    return {"ok": True, "visibility": work.visibility}
+
+
 @router.post("/imports")
 def create_imports(body: ImportRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    visibility = normalize_visibility(body.visibility)
     jobs, rejected = [], []
     for url in body.urls:
         if is_supported(url):
-            jobs.append(enqueue_import(db, url, user))
+            jobs.append(enqueue_import(db, url, user, visibility=visibility))
         else:
             rejected.append(url)
     db.commit()
@@ -384,7 +417,9 @@ def list_jobs(
 ):
     limit = min(max(limit, 1), 500)
     offset = max(offset, 0)
-    query = select(ImportJob)
+    query = select(ImportJob).outerjoin(Work, ImportJob.work_id == Work.id).where(
+        visible_jobs_clause(user)
+    )
     if kind in ("import", "update"):
         query = query.where(ImportJob.kind == kind)
     if status in ("queued", "running", "done", "failed"):
@@ -402,7 +437,17 @@ def list_jobs(
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), user: User = Depends(current_user)):
     works_added = (
-        select(func.count(Work.id)).where(Work.added_by_id == User.id).correlate(User).scalar_subquery()
+        select(func.count(Work.id))
+        .where(
+            Work.added_by_id == User.id,
+            or_(
+                Work.visibility != VISIBILITY_PRIVATE,
+                Work.visibility.is_(None),
+                Work.added_by_id == user.id,
+            ),
+        )
+        .correlate(User)
+        .scalar_subquery()
     )
     chapters_imported = (
         select(func.count(Chapter.id)).where(Chapter.imported_by_id == User.id).correlate(User).scalar_subquery()
@@ -443,7 +488,7 @@ def list_comments(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    _get_work(db, work_id)
+    _get_work(db, work_id, user)
     thread = comments.thread(db, work_id, chapter_id)
     return {
         "comments": [_comment(c, user) for c in thread],
@@ -458,7 +503,7 @@ def create_comment(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    work = _get_work(db, work_id)
+    work = _get_work(db, work_id, user)
     try:
         text = comments.clean_body(body.body)
     except comments.CommentError as exc:
@@ -593,10 +638,15 @@ def list_notifications(
     # New stories, chapter updates, and in-flight job progress.
     jobs = db.scalars(select(ImportJob).order_by(ImportJob.id.desc()).limit(120)).all()
     for job in jobs:
+        if not can_view_job(user, job):
+            continue
         relevant = (
             job.requested_by_id == user.id
             or (job.work_id is not None and job.work_id in watched)
-            or job.kind == "import"
+            or (
+                job.kind == "import"
+                and normalize_visibility(job.visibility) != VISIBILITY_PRIVATE
+            )
         )
         if not relevant:
             continue

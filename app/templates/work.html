@@ -10,6 +10,7 @@
   <div class="card-badges">
     {{ site_badge(work.site) }}
     {{ status_pill(work.status) }}
+    {% if work.is_private %}<span class="pill pill-private">Private</span>{% else %}<span class="pill">Public</span>{% endif %}
     {% if work.rating %}<span class="pill">{{ work.rating }}</span>{% endif %}
     <a href="#comments" class="pill pill-link">{{ icon("chat") }} {{ comment_count }} comment{{ "" if comment_count == 1 else "s" }}</a>
   </div>
@@ -27,6 +28,16 @@
       <form method="post" action="/works/{{ work.id }}/unfollow"><button class="outline" aria-pressed="true">{{ icon("star") }} Following</button></form>
     {% else %}
       <form method="post" action="/works/{{ work.id }}/follow"><button class="outline" aria-pressed="false">{{ icon("star") }} Follow</button></form>
+    {% endif %}
+    {% if work.added_by_id == user.id or user.is_admin %}
+      <form method="post" action="/works/{{ work.id }}/visibility">
+        <input type="hidden" name="visibility" value="{{ 'public' if work.is_private else 'private' }}">
+        {% if work.is_private %}
+          <button class="secondary outline">{{ icon("unlock") }} Make public</button>
+        {% else %}
+          <button class="secondary outline">{{ icon("lock") }} Make private</button>
+        {% endif %}
+      </form>
     {% endif %}
     {% if settings.translate_url %}
       {% set translate_endpoint = "/works/%d/translation"|format(work.id) %}
@@ -53,6 +64,11 @@
     <span class="stat-sub">Auto-update {{ "on" if work.auto_update else "off" }}
       {%- if can_manage %} · <form method="post" action="/works/{{ work.id }}/auto-update" class="inline"><button class="link">turn {{ "off" if work.auto_update else "on" }}</button></form>{% endif %}
     </span>
+  </div>
+  <div><span class="stat-label">Visibility</span><span class="stat-value">{{ "Private" if work.is_private else "Public" }}</span>
+    {% if work.added_by_id == user.id or user.is_admin %}
+    <span class="stat-sub">{{ "Only you can read this." if work.is_private else "Everyone on this server can read this." }}</span>
+    {% endif %}
   </div>
 </section>
 

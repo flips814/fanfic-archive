@@ -5,6 +5,7 @@ from sqlalchemy import and_, not_, or_, select
 from sqlalchemy.orm import Session
 
 from app import notify
+from app.access import VISIBILITY_PRIVATE, VISIBILITY_PUBLIC, can_view, normalize_visibility
 from app.config import settings
 from app.db import session_scope
 from app.importers import ImportError_, WorkMeta, open_work, site_label
@@ -16,18 +17,46 @@ log = logging.getLogger(__name__)
 
 PENDING = ("queued", "running")
 
+_PRIVATE_COLLISION = (
+    "This story is already in the archive as a private work owned by another user."
+)
+
 
 # ---------------------------------------------------------------- enqueueing
 
-def enqueue_import(db: Session, url: str, user: User | None) -> ImportJob:
+def enqueue_import(
+    db: Session, url: str, user: User | None, visibility: str = VISIBILITY_PUBLIC
+) -> ImportJob:
+    visibility = normalize_visibility(visibility)
     existing = db.scalar(select(Work).where(Work.source_url == url.strip()))
     if existing:
+        if existing.is_private and (user is None or existing.added_by_id != user.id):
+            # Keep the failed job private so the existing private URL isn't listed to others.
+            job = ImportJob(
+                kind="import",
+                url=url.strip(),
+                work_id=None,
+                work_title=None,
+                requested_by_id=user.id if user else None,
+                visibility=VISIBILITY_PRIVATE,
+                status="failed",
+                message=_PRIVATE_COLLISION,
+                finished_at=utcnow(),
+            )
+            db.add(job)
+            db.flush()
+            return job
         if user:
             follow(db, user, existing)
         job = enqueue_update(db, existing, user)
         if job:
             return job
-    job = ImportJob(kind="import", url=url.strip(), requested_by_id=user.id if user else None)
+    job = ImportJob(
+        kind="import",
+        url=url.strip(),
+        requested_by_id=user.id if user else None,
+        visibility=visibility,
+    )
     db.add(job)
     db.flush()
     return job
@@ -45,6 +74,7 @@ def enqueue_update(db: Session, work: Work, user: User | None = None) -> ImportJ
         work_id=work.id,
         work_title=work.title,
         requested_by_id=user.id if user else None,
+        visibility=normalize_visibility(work.visibility),
     )
     db.add(job)
     db.flush()
@@ -142,6 +172,7 @@ def run_job(job_id: int) -> None:
         job = db.get(ImportJob, job_id)
         url, kind, requester_id = job.url, job.kind, job.requested_by_id
         work_id = job.work_id
+        intended_visibility = normalize_visibility(job.visibility)
 
     try:
         with session_scope() as db:
@@ -153,8 +184,16 @@ def run_job(job_id: int) -> None:
         with session_scope() as db:
             work = db.get(Work, work_id) if work_id else None
             work = work or db.scalar(select(Work).where(Work.source_url == meta.url))
+            if work is not None and work.is_private and work.added_by_id != requester_id:
+                raise ImportError_(_PRIVATE_COLLISION)
             if work is None:
-                work = Work(added_by_id=requester_id, title=meta.title, site=meta.site, source_url=meta.url)
+                work = Work(
+                    added_by_id=requester_id,
+                    title=meta.title,
+                    site=meta.site,
+                    source_url=meta.url,
+                    visibility=intended_visibility,
+                )
                 db.add(work)
                 created = True
             _apply_meta(work, meta)
@@ -242,12 +281,15 @@ def _send_notifications(job_id: int, created: bool, new_chapters: list[tuple[int
         who = job.requested_by.label if job.requested_by else "auto-updater"
         link = f"{settings.base_url}/works/{work.id}"
         byline = f"**{work.title}** by {work.author or 'unknown'} ({site_label(work.site)})"
+        # Server Discord / Apprise announcements are only for the shared (public) library.
+        announce = not work.is_private
 
         if created:
-            notify.notify_global(
-                f"New work imported: {work.title}",
-                f"{who} imported {byline} — {len(new_chapters)} chapter(s).\n\n{link}",
-            )
+            if announce:
+                notify.notify_global(
+                    f"New work imported: {work.title}",
+                    f"{who} imported {byline} — {len(new_chapters)} chapter(s).\n\n{link}",
+                )
             return
         if not new_chapters:
             return
@@ -259,5 +301,7 @@ def _send_notifications(job_id: int, created: bool, new_chapters: list[tuple[int
         body = f"{byline} was updated.\n\n{listing}\n\nRead: {link}\nSource: {work.source_url}"
 
         for f in work.followers:
-            notify.notify_user(f.user, title, body)
-        notify.notify_global(title, f"{body}\n\n(found by {who})")
+            if can_view(f.user, work):
+                notify.notify_user(f.user, title, body)
+        if announce:
+            notify.notify_global(title, f"{body}\n\n(found by {who})")

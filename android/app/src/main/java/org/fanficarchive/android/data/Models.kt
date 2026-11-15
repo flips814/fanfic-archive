@@ -44,6 +44,10 @@ data class UserMe(
 @Serializable
 data class UserRef(val id: Int, val name: String)
 
+/** Server work visibility: shared library vs importer-only. */
+const val VISIBILITY_PUBLIC = "public"
+const val VISIBILITY_PRIVATE = "private"
+
 @Serializable
 data class WorkSummary(
     val id: Int,
@@ -63,7 +67,10 @@ data class WorkSummary(
     @SerialName("auto_update") val autoUpdate: Boolean = true,
     @SerialName("last_error") val lastError: String? = null,
     @SerialName("is_following") val isFollowing: Boolean = false,
-)
+    val visibility: String = VISIBILITY_PUBLIC,
+) {
+    val isPrivate: Boolean get() = visibility == VISIBILITY_PRIVATE
+}
 
 @Serializable
 data class WorkListResponse(
@@ -111,6 +118,7 @@ data class WorkDetail(
     @SerialName("is_following") val isFollowing: Boolean = false,
     @SerialName("can_manage") val canManage: Boolean = false,
     @SerialName("comment_count") val commentCount: Int = 0,
+    val visibility: String = VISIBILITY_PUBLIC,
     val fandoms: List<String> = emptyList(),
     val relationships: List<String> = emptyList(),
     val characters: List<String> = emptyList(),
@@ -118,7 +126,9 @@ data class WorkDetail(
     val warnings: List<String> = emptyList(),
     @SerialName("summary_html") val summaryHtml: String? = null,
     @SerialName("chapter_list") val chapterList: List<ChapterSummary> = emptyList(),
-)
+) {
+    val isPrivate: Boolean get() = visibility == VISIBILITY_PRIVATE
+}
 
 @Serializable
 data class ChapterContent(
@@ -173,7 +183,19 @@ data class FollowResponse(val ok: Boolean = true, @SerialName("is_following") va
 data class AutoUpdateResponse(val ok: Boolean = true, @SerialName("auto_update") val autoUpdate: Boolean)
 
 @Serializable
-data class ImportRequest(val urls: List<String>)
+data class ImportRequest(
+    val urls: List<String>,
+    val visibility: String = VISIBILITY_PUBLIC,
+)
+
+@Serializable
+data class VisibilityUpdateRequest(val visibility: String)
+
+@Serializable
+data class VisibilityUpdateResponse(
+    val ok: Boolean = true,
+    val visibility: String = VISIBILITY_PUBLIC,
+)
 
 @Serializable
 data class Job(
@@ -188,7 +210,10 @@ data class Job(
     @SerialName("chapters_added") val chaptersAdded: Int = 0,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("finished_at") val finishedAt: String? = null,
-)
+    val visibility: String = VISIBILITY_PUBLIC,
+) {
+    val isPrivate: Boolean get() = visibility == VISIBILITY_PRIVATE
+}
 
 @Serializable
 data class JobListResponse(

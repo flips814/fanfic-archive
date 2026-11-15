@@ -38,6 +38,8 @@ import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.CommentItem
 import org.fanficarchive.android.data.ReaderPrefs
 import org.fanficarchive.android.data.ReadingProgress
+import org.fanficarchive.android.data.VISIBILITY_PRIVATE
+import org.fanficarchive.android.data.VISIBILITY_PUBLIC
 import org.fanficarchive.android.data.WorkDetail
 import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.ErrorText
@@ -47,6 +49,8 @@ import org.fanficarchive.android.screens.components.HtmlPane
 import org.fanficarchive.android.screens.components.LoadingBox
 import org.fanficarchive.android.screens.components.MetaChip
 import org.fanficarchive.android.screens.components.PrimaryButton
+import org.fanficarchive.android.screens.components.PrivatePill
+import org.fanficarchive.android.screens.components.PublicPill
 import org.fanficarchive.android.screens.components.QuietButton
 import org.fanficarchive.android.screens.components.SecondaryButton
 import org.fanficarchive.android.screens.components.SiteBadge
@@ -140,6 +144,7 @@ fun WorkDetailScreen(
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         SiteBadge(detail.site)
                         StatusPill(detail.status)
+                        if (detail.isPrivate) PrivatePill() else PublicPill()
                         if (detail.isFollowing) FollowingPill()
                         if (detail.rating != null) {
                             MetaChip(text = detail.rating)
@@ -234,6 +239,23 @@ fun WorkDetailScreen(
                         if (detail.canManage) {
                             SecondaryButton(
                                 onClick = {
+                                    val next = if (detail.isPrivate) VISIBILITY_PUBLIC else VISIBILITY_PRIVATE
+                                    scope.launch {
+                                        runCatching { repository.setVisibility(workId, next) }
+                                            .onSuccess {
+                                                work = detail.copy(visibility = it.visibility)
+                                                statusMessage = if (it.visibility == VISIBILITY_PRIVATE) {
+                                                    "Now private — only you can see it"
+                                                } else {
+                                                    "Now public — everyone on the server can see it"
+                                                }
+                                            }
+                                            .onFailure { error = repository.errorMessage(it) }
+                                    }
+                                },
+                            ) { ButtonLabel(if (detail.isPrivate) "Make public" else "Make private") }
+                            SecondaryButton(
+                                onClick = {
                                     scope.launch {
                                         runCatching { repository.toggleAutoUpdate(workId) }
                                             .onSuccess { work = detail.copy(autoUpdate = it.autoUpdate) }
@@ -242,6 +264,17 @@ fun WorkDetailScreen(
                                 },
                             ) { ButtonLabel(if (detail.autoUpdate) "Auto-update on" else "Auto-update off") }
                         }
+                    }
+                    if (detail.canManage) {
+                        Text(
+                            if (detail.isPrivate) {
+                                "Private — only you can find and read this work."
+                            } else {
+                                "Public — everyone on this server can find and read this work."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                     TranslatePanel(
                         repository = repository,

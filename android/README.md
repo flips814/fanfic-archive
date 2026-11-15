@@ -40,11 +40,11 @@ UI mirrors the website (Pico Violet): bottom nav for **Library**, **Add works**,
 
 - Server URL profile (DataStore)
 - SSO via in-app WebView (`/login/sso`) and local login via `POST /api/login`
-- Library search, site/status/following filters, card layout
-- Add works (batch URL import)
-- Activity log with kind/status filters
+- Library search, site/status/following filters, card layout (private works show a Private badge; API hides others’ private stories)
+- Add works (batch URL import) with Public / Private visibility for the whole batch
+- Activity log with kind/status filters (private imports only for the importer)
 - Users list with import stats
-- Work detail: follow, update check, auto-update, EPUB share, comments, delete, title/summary translation
+- Work detail: follow, update check, Make private / Make public, auto-update, EPUB share, comments, delete, title/summary translation
 - Chapter reader: full-page scroll, collapsible Translate + Reading settings, LibreTranslate
 - Local reading bookmarks (last chapter + scroll position) with Continue on work/library cards
 - Settings notifications feed (new stories, updates, comments, follows, import/update progress)

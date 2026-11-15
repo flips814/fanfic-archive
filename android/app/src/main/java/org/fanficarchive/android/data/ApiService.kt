@@ -58,6 +58,9 @@ interface ApiService {
     @DELETE("api/works/{id}")
     suspend fun deleteWork(@Path("id") id: Int): OkResponse
 
+    @POST("api/works/{id}/visibility")
+    suspend fun setVisibility(@Path("id") id: Int, @Body body: VisibilityUpdateRequest): VisibilityUpdateResponse
+
     @POST("api/imports")
     suspend fun imports(@Body body: ImportRequest): ImportResponse
 
