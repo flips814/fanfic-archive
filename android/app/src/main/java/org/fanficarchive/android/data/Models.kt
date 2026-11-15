@@ -6,6 +6,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ServerInfo(
     @SerialName("site_name") val siteName: String = "Fanfic Archive",
+    /** Public URL configured on the host (BASE_URL), when set. */
+    @SerialName("base_url") val baseUrl: String? = null,
     @SerialName("api_version") val apiVersion: Int = 1,
     val auth: AuthCapabilities = AuthCapabilities(),
     val features: FeatureFlags = FeatureFlags(),
@@ -255,6 +257,27 @@ data class NotificationSettings(
     @SerialName("notify_email_address") val notifyEmailAddress: String? = null,
     @SerialName("discord_webhook_url") val discordWebhookUrl: String? = null,
     @SerialName("apprise_urls") val appriseUrls: String? = null,
+)
+
+@Serializable
+data class StoryNotification(
+    val id: String,
+    val kind: String,
+    val title: String,
+    val body: String,
+    @SerialName("work_id") val workId: Int? = null,
+    @SerialName("work_title") val workTitle: String? = null,
+    val actor: UserRef? = null,
+    @SerialName("job_id") val jobId: Int? = null,
+    @SerialName("chapters_added") val chaptersAdded: Int = 0,
+    val status: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+@Serializable
+data class StoryNotificationList(
+    val notifications: List<StoryNotification> = emptyList(),
+    val total: Int = 0,
 )
 
 @Serializable

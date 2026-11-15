@@ -218,12 +218,25 @@ fun FilterTag(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun WorkCard(work: WorkSummary, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun WorkCard(
+    work: WorkSummary,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    resumeChapter: Int? = null,
+) {
     FanficCard(modifier = modifier, onClick = onClick) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             SiteBadge(work.site)
             StatusPill(work.status)
             if (work.isFollowing) FollowingPill()
+            if (resumeChapter != null) {
+                MetaChip(
+                    text = "Continue · Ch $resumeChapter",
+                    foreground = MaterialTheme.colorScheme.primary,
+                    background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    border = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
         Text(
             work.title,
@@ -300,6 +313,13 @@ fun TagGroup(label: String, values: List<String>, modifier: Modifier = Modifier)
     }
 }
 
+private fun Color.toCssHex(): String {
+    val r = (red * 255).toInt().coerceIn(0, 255)
+    val g = (green * 255).toInt().coerceIn(0, 255)
+    val b = (blue * 255).toInt().coerceIn(0, 255)
+    return "#%02x%02x%02x".format(r, g, b)
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun HtmlPane(
@@ -309,27 +329,44 @@ fun HtmlPane(
     theme: String = "sepia",
     /** When true, sizes to document height so a parent Column can scroll the whole page. */
     wrapContentHeight: Boolean = false,
+    /** Tighter padding and UI sans font — for summaries that should match surrounding screens. */
+    blendWithApp: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
-    var contentHeightPx by remember(html, fontScale, theme) { mutableIntStateOf(0) }
-    val (bg, fg, link) = when (theme) {
-        "dark" -> Triple("#18181b", "#e7e3da", "#c4b5fd")
-        "light" -> Triple("#ffffff", "#1f1f24", "#5b21b6")
-        "high" -> Triple("#000000", "#ffffff", "#c4b5fd")
-        "site" -> Triple("#f8f7fc", "#1f1f24", "#7540bf")
+    val scheme = MaterialTheme.colorScheme
+    var contentHeightPx by remember(html, fontScale, theme, blendWithApp, scheme.background, scheme.onBackground) {
+        mutableIntStateOf(0)
+    }
+    val (bg, fg, link) = when {
+        blendWithApp || theme == "app" -> Triple(
+            scheme.background.toCssHex(),
+            scheme.onBackground.toCssHex(),
+            scheme.primary.toCssHex(),
+        )
+        theme == "dark" -> Triple("#18181b", "#e7e3da", "#c4b5fd")
+        theme == "light" -> Triple("#ffffff", "#1f1f24", "#5b21b6")
+        theme == "high" -> Triple("#000000", "#ffffff", "#c4b5fd")
+        theme == "site" -> Triple("#f8f7fc", "#1f1f24", "#7540bf")
         else -> Triple("#f5ecd7", "#3b2f1e", "#5b21b6")
     }
+    val fontFamily = if (blendWithApp) {
+        """-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif"""
+    } else {
+        """Georgia, "Times New Roman", serif"""
+    }
+    val bodyPadding = if (blendWithApp) "0" else "16px"
     val page = """
         <!DOCTYPE html><html><head>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
         <style>
           html, body { margin: 0; padding: 0; background: $bg; color: $fg; }
-          body { padding: 16px; font-family: Georgia, "Times New Roman", serif;
-                 font-size: ${16 * fontScale}px; line-height: 1.75; }
+          body { padding: $bodyPadding; font-family: $fontFamily;
+                 font-size: ${16 * fontScale}px; line-height: 1.6; }
           a { color: $link; }
           img { max-width: 100%; height: auto; }
-          p { margin: 0 0 1em; }
+          p { margin: 0 0 0.85em; }
+          p:last-child { margin-bottom: 0; }
         </style></head><body>$html</body></html>
     """.trimIndent()
 

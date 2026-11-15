@@ -174,6 +174,7 @@ fun FanficNavHost(repository: ArchiveRepository) {
                     repository = repository,
                     profile = current,
                     onBack = { navController.popBackStack() },
+                    onOpenWork = { navController.navigate(Routes.work(it)) },
                     onLoggedOut = {
                         navController.navigate(Routes.LOGIN) {
                             popUpTo(0) { inclusive = true }

@@ -3,8 +3,11 @@ package org.fanficarchive.android.data
 import android.webkit.CookieManager
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -201,6 +204,9 @@ class ArchiveRepository(
 
     suspend fun removeComment(commentId: Int): OkResponse = api().deleteComment(commentId)
 
+    suspend fun listNotifications(limit: Int = 50): StoryNotificationList =
+        api().notifications(limit = limit)
+
     suspend fun getSettings(): NotificationSettings = api().getSettings()
 
     suspend fun saveSettings(settings: NotificationSettings): NotificationSettings =
@@ -235,6 +241,30 @@ class ArchiveRepository(
 
     suspend fun saveTranslateTo(code: String?) {
         prefs.saveTranslateTo(code)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun readingProgressForCurrentServer(): Flow<Map<Int, ReadingProgress>> =
+        prefs.profile.map { it.baseUrl }.flatMapLatest { base ->
+            prefs.readingProgressForServer(base)
+        }
+
+    suspend fun getReadingProgress(workId: Int): ReadingProgress? {
+        val base = prefs.profile.first().baseUrl
+        if (base.isBlank()) return null
+        return prefs.getReadingProgress(base, workId)
+    }
+
+    suspend fun saveReadingProgress(workId: Int, chapterNumber: Int, scrollOffset: Int) {
+        val base = prefs.profile.first().baseUrl
+        if (base.isBlank()) return
+        prefs.saveReadingProgress(base, workId, chapterNumber, scrollOffset)
+    }
+
+    suspend fun clearReadingProgress(workId: Int) {
+        val base = prefs.profile.first().baseUrl
+        if (base.isBlank()) return
+        prefs.clearReadingProgress(base, workId)
     }
 
     suspend fun translateLanguages(sourceLanguageCode: String? = null): TranslateLanguagesResponse =

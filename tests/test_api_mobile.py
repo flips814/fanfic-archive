@@ -30,6 +30,7 @@ def test_info_is_public_and_describes_auth():
     info = TestClient(app).get("/api/info").json()
     assert info["api_version"] == 1
     assert "site_name" in info
+    assert "base_url" in info and info["base_url"]
     assert info["auth"]["local"] is False
     assert info["auth"]["oidc"] is False
     assert info["auth"]["oidc_provider_name"] is None
@@ -109,3 +110,10 @@ def test_chapter_content_follow_and_filters(fake_site, sent):
 
     job = alice.post(f"/api/works/{work_id}/check").json()
     assert job["kind"] == "update" and job["status"] == "queued"
+
+    notes = alice.get("/api/notifications").json()["notifications"]
+    kinds = {n["kind"] for n in notes}
+    assert "story_added" in kinds
+    assert "following" in kinds
+    assert any(n["work_id"] == work_id for n in notes)
+    assert TestClient(app).get("/api/notifications").status_code == 401
