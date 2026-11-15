@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit
 
 class ArchiveRepository(
     private val prefs: ServerPreferences,
-    private val cookieJar: SessionCookieJar = SessionCookieJar(),
+    private val cookieJar: SessionCookieJar,
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -145,6 +145,35 @@ class ArchiveRepository(
     }
 
     suspend fun me(): UserMe = api().me()
+
+    /**
+     * Re-validate a persisted session after process death.
+     * Returns true if still authenticated; clears local login on a hard 401.
+     */
+    suspend fun restoreSession(): Boolean {
+        val profile = prefs.profile.first()
+        if (!profile.loggedIn || profile.baseUrl.isBlank()) return false
+        if (!cookieJar.hasSession(profile.baseUrl)) {
+            // SSO may still have the cookie in WebView storage.
+            cookieJar.importFromCookieManager(profile.baseUrl)
+        }
+        if (!cookieJar.hasSession(profile.baseUrl)) {
+            prefs.setLoggedIn(false)
+            return false
+        }
+        return runCatching {
+            val user = api().me()
+            prefs.setLoggedIn(true, user.name)
+            true
+        }.getOrElse { err ->
+            if (err is HttpException && err.code() == 401) {
+                cookieJar.clear()
+                clearWebViewCookies()
+                prefs.setLoggedIn(false)
+            }
+            false
+        }
+    }
 
     suspend fun listWorks(
         query: String = "",

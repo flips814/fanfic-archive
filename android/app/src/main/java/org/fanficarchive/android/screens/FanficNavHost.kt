@@ -74,6 +74,8 @@ fun FanficNavHost(repository: ArchiveRepository) {
     var serverInfo by remember { mutableStateOf<ServerInfo?>(null) }
 
     LaunchedEffect(Unit) {
+        // Persist cookies across process death; re-check /api/me before routing.
+        runCatching { repository.restoreSession() }
         profile = repository.profile.first()
     }
     LaunchedEffect(liveProfile) {
