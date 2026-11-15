@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
 import org.fanficarchive.android.data.ArchiveRepository
+import org.fanficarchive.android.data.VISIBILITY_PRIVATE
+import org.fanficarchive.android.data.VISIBILITY_PUBLIC
 import org.fanficarchive.android.data.WorkSummary
 import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.EmptyState
@@ -57,6 +59,7 @@ fun LibraryScreen(
     var query by remember { mutableStateOf("") }
     var site by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
+    var visibility by remember { mutableStateOf("") }
     var followedOnly by remember { mutableStateOf(false) }
     var showFilters by remember { mutableStateOf(false) }
     var sites by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -77,6 +80,7 @@ fun LibraryScreen(
                     query = query,
                     site = site.ifBlank { null },
                     status = status.ifBlank { null },
+                    visibility = visibility.ifBlank { null },
                     followedOnly = followedOnly,
                 )
             }.onSuccess {
@@ -88,11 +92,12 @@ fun LibraryScreen(
         }
     }
 
-    LaunchedEffect(site, status, followedOnly) { refresh() }
+    LaunchedEffect(site, status, visibility, followedOnly) { refresh() }
 
     val activeFilters = listOfNotNull(
         site.ifBlank { null },
         status.ifBlank { null },
+        visibility.ifBlank { null },
         if (followedOnly) "following" else null,
     ).size
 
@@ -160,6 +165,27 @@ fun LibraryScreen(
                             label = "In progress",
                             selected = status == "ongoing",
                             onClick = { status = if (status == "ongoing") "" else "ongoing" },
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterTag(
+                            label = "All visibility",
+                            selected = visibility.isBlank(),
+                            onClick = { visibility = "" },
+                        )
+                        FilterTag(
+                            label = "Public",
+                            selected = visibility == VISIBILITY_PUBLIC,
+                            onClick = {
+                                visibility = if (visibility == VISIBILITY_PUBLIC) "" else VISIBILITY_PUBLIC
+                            },
+                        )
+                        FilterTag(
+                            label = "Private",
+                            selected = visibility == VISIBILITY_PRIVATE,
+                            onClick = {
+                                visibility = if (visibility == VISIBILITY_PRIVATE) "" else VISIBILITY_PRIVATE
+                            },
                         )
                     }
                     if (sites.isNotEmpty()) {

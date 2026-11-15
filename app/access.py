@@ -34,6 +34,16 @@ def visible_works_clause(user: User) -> ColumnElement[bool]:
     )
 
 
+def visibility_filter_clause(visibility: str | None) -> ColumnElement[bool] | None:
+    """Optional library filter: ``public``, ``private``, or None/empty for all visible works."""
+    value = (visibility or "").strip().lower()
+    if value == VISIBILITY_PRIVATE:
+        return Work.visibility == VISIBILITY_PRIVATE
+    if value == VISIBILITY_PUBLIC:
+        return or_(Work.visibility != VISIBILITY_PRIVATE, Work.visibility.is_(None))
+    return None
+
+
 def visible_jobs_clause(user: User) -> ColumnElement[bool]:
     """SQL filter for activity rows. Requires ImportJob outerjoined to Work.
 

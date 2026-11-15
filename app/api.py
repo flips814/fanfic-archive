@@ -11,6 +11,7 @@ from app.access import (
     can_view_job,
     normalize_visibility,
     prune_followers_for_privacy,
+    visibility_filter_clause,
     visible_jobs_clause,
     visible_works_clause,
 )
@@ -240,6 +241,7 @@ def list_works(
     q: str = "",
     site: str = "",
     status: str = "",
+    visibility: str = "",
     mine: str = "",
     followed: str = "",
     added_by: int | None = None,
@@ -250,6 +252,9 @@ def list_works(
 ):
     limit = min(max(limit, 1), 500)
     offset = max(offset, 0)
+    visibility = visibility.strip().lower()
+    if visibility not in (VISIBILITY_PUBLIC, VISIBILITY_PRIVATE):
+        visibility = ""
     query = select(Work).where(visible_works_clause(user))
     if q:
         like = f"%{q}%"
@@ -260,6 +265,9 @@ def list_works(
         query = query.where(Work.status.ilike("complete%"))
     elif status == "ongoing":
         query = query.where(or_(Work.status.is_(None), ~Work.status.ilike("complete%")))
+    vis_clause = visibility_filter_clause(visibility)
+    if vis_clause is not None:
+        query = query.where(vis_clause)
     if mine:
         query = query.where(Work.added_by_id == user.id)
     if added_by is not None:

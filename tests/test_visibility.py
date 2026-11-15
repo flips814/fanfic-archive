@@ -170,6 +170,28 @@ def test_public_import_sends_server_announcement(fake_site, sent, monkeypatch):
     assert any("discord://" in u for n in sent["apprise"] for u in n["urls"])
 
 
+def test_library_visibility_filter(fake_site, sent):
+    alice = login("alice")
+    public_url = fake_site.add_work("1", "Public Filter Fic", chapters=1)
+    private_url = fake_site.add_work("2", "Private Filter Fic", chapters=1)
+    alice.post("/add", data={"urls": public_url, "visibility": "public"})
+    alice.post("/add", data={"urls": private_url, "visibility": "private"})
+    assert drain() == 2
+
+    public_page = alice.get("/?visibility=public").text
+    assert "Public Filter Fic" in public_page
+    assert "Private Filter Fic" not in public_page
+
+    private_page = alice.get("/?visibility=private").text
+    assert "Private Filter Fic" in private_page
+    assert "Public Filter Fic" not in private_page
+
+    api_public = alice.get("/api/works", params={"visibility": "public"}).json()
+    assert {w["title"] for w in api_public["works"]} == {"Public Filter Fic"}
+    api_private = alice.get("/api/works", params={"visibility": "private"}).json()
+    assert {w["title"] for w in api_private["works"]} == {"Private Filter Fic"}
+
+
 def test_private_import_only_on_importers_activity(fake_site, sent):
     alice, bob = login("alice"), login("bob")
     url, _ = _import_private(fake_site, alice, title="Quiet Activity")

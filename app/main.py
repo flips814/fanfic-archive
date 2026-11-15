@@ -20,6 +20,7 @@ from app.access import (
     can_view_job,
     normalize_visibility,
     prune_followers_for_privacy,
+    visibility_filter_clause,
     visible_jobs_clause,
     visible_works_clause,
 )
@@ -212,6 +213,7 @@ def library(
     site: str = "",
     added_by: str = "",
     status: str = "",
+    visibility: str = "",
     mine: str = "",
     page: int = 1,
     db: Session = Depends(get_db),
@@ -220,6 +222,9 @@ def library(
     if user is None:
         return render(request, "landing.html", None)
     added_by_id = _int_or_none(added_by)
+    visibility = visibility.strip().lower()
+    if visibility not in (VISIBILITY_PUBLIC, VISIBILITY_PRIVATE):
+        visibility = ""
     chapter_count = (
         select(func.count(Chapter.id)).where(Chapter.work_id == Work.id).correlate(Work).scalar_subquery()
     )
@@ -235,6 +240,9 @@ def library(
         query = query.where(Work.status.ilike("complete%"))
     elif status == "ongoing":
         query = query.where(or_(Work.status.is_(None), ~Work.status.ilike("complete%")))
+    vis_clause = visibility_filter_clause(visibility)
+    if vis_clause is not None:
+        query = query.where(vis_clause)
     if mine:
         query = query.join(Follow, (Follow.work_id == Work.id) & (Follow.user_id == user.id))
 
@@ -260,7 +268,14 @@ def library(
         followed=followed,
         sites=sites,
         users=users,
-        filters={"q": q, "site": site, "added_by": added_by_id, "status": status, "mine": bool(mine)},
+        filters={
+            "q": q,
+            "site": site,
+            "added_by": added_by_id,
+            "status": status,
+            "visibility": visibility,
+            "mine": bool(mine),
+        },
     )
 
 

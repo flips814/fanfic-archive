@@ -30,6 +30,7 @@ interface ApiService {
         @Query("q") q: String? = null,
         @Query("site") site: String? = null,
         @Query("status") status: String? = null,
+        @Query("visibility") visibility: String? = null,
         @Query("mine") mine: String? = null,
         @Query("followed") followed: String? = null,
         @Query("added_by") addedBy: Int? = null,
