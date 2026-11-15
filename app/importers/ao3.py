@@ -172,16 +172,61 @@ def _http_status_error(status: int, url: str) -> ImportError_:
 
 
 def _session(logins: dict[str, tuple[str, str]]):
+    """Return an ao3-api session, or ``None`` to continue as a guest.
+
+    ao3-api's login does ``soup.find(...)['value']`` with no null check, so a
+    Cloudflare/waiting-room login page raises ``TypeError: 'NoneType' object is
+    not subscriptable`` instead of LoginError.
+    """
     creds = logins.get(SITE)
     if not creds:
         return None
     username, password = creds
     try:
         return AO3.Session(username, password)
-    except ao3_utils.HTTPError as e:
-        raise _map_error(e) from e
     except ao3_utils.LoginError as e:
         raise _map_error(e) from e
+    except ao3_utils.HTTPError as e:
+        raise _map_error(e) from e
+    except (TypeError, AttributeError, KeyError) as e:
+        log.warning(
+            "AO3 login form missing or blocked for %s (%s); continuing without login",
+            username,
+            e,
+        )
+        return None
+    except requests.RequestException as e:
+        log.warning("AO3 login request failed for %s (%s); continuing without login", username, e)
+        return None
+
+
+def _prop(work: AO3.Work, name: str, default=None):
+    """Read an ao3-api cached property without letting its fragile soup access crash the import."""
+    try:
+        value = getattr(work, name)
+    except Exception as e:
+        log.debug("AO3 work.%s unavailable: %s", name, e)
+        return default
+    return default if value is None else value
+
+
+def _work_complete(work: AO3.Work) -> bool:
+    try:
+        return bool(work.complete)
+    except Exception:
+        chapters = work._soup.find("dd", class_="chapters") if work._soup else None
+        text = (chapters.get_text() if chapters else "") or ""
+        parts = [p.strip() for p in text.split("/") if p.strip()]
+        return len(parts) == 2 and parts[0] == parts[1] and parts[0].isdigit()
+
+
+def _work_date(work: AO3.Work, *names: str) -> datetime | None:
+    for name in names:
+        value = _prop(work, name, None)
+        aware = _aware(value if isinstance(value, (date, datetime)) else None)
+        if aware is not None:
+            return aware
+    return None
 
 
 def _flaresolverr_get(url: str) -> tuple[int, bytes]:
@@ -334,9 +379,9 @@ class Ao3Source(WorkSource):
                 )
             raise ImportError_(f"Work not found or has no chapters: {url}")
 
-        authors = work.authors or []
-        author = authors[0].username if authors else None
-        author_url = authors[0].url if authors else None
+        authors = _prop(work, "authors", []) or []
+        author = getattr(authors[0], "username", None) if authors else None
+        author_url = getattr(authors[0], "url", None) if authors else None
 
         chapters_meta: list[ChapterRef] = []
         for i, chapter in enumerate(work.chapters):
@@ -349,8 +394,8 @@ class Ao3Source(WorkSource):
                 chapter_url = f"https://archiveofourown.org/works/{work.id}/chapters/{chapter.id}"
                 key = chapter_url
             else:
-                chapter_url = work.url
-                key = work.url
+                chapter_url = f"https://archiveofourown.org/works/{work.id}"
+                key = chapter_url
             chapters_meta.append(ChapterRef(key=key, title=title, url=chapter_url))
 
         self._bodies = self._load_bodies(work)
@@ -358,31 +403,33 @@ class Ao3Source(WorkSource):
             log.warning(
                 "AO3 chapter body count mismatch for %s: got %d bodies for %d chapters; "
                 "falling back to full-work page HTML",
-                work.url,
+                work.id,
                 len(self._bodies),
                 len(chapters_meta),
             )
             self._bodies = [_html_from_chapter_soup(c) for c in work.chapters]
 
+        language = _prop(work, "language", None)
+        words = _prop(work, "words", None)
         self.meta = WorkMeta(
             site=SITE,
-            url=work.url,
+            url=f"https://archiveofourown.org/works/{work.id}",
             source_id=str(work.id),
-            title=work.title or "Untitled",
+            title=(_prop(work, "title", None) or "Untitled"),
             author=author,
             author_url=author_url,
             summary_html=_summary_html(work),
-            rating=work.rating,
-            status="Completed" if work.complete else "In-Progress",
-            language=None if work.language in (None, "Unknown") else work.language,
-            word_count=work.words or None,
-            fandoms=_tag_list(work.fandoms),
-            relationships=_tag_list(work.relationships),
-            characters=_tag_list(work.characters),
-            tags=_tag_list(work.tags) + _tag_list(work.categories),
-            warnings=_tag_list(work.warnings),
-            published_at=_aware(work.date_published),
-            updated_at=_aware(work.date_updated),
+            rating=_prop(work, "rating", None),
+            status="Completed" if _work_complete(work) else "In-Progress",
+            language=None if language in (None, "Unknown") else language,
+            word_count=int(words) if words else None,
+            fandoms=_tag_list(_prop(work, "fandoms", [])),
+            relationships=_tag_list(_prop(work, "relationships", [])),
+            characters=_tag_list(_prop(work, "characters", [])),
+            tags=_tag_list(_prop(work, "tags", [])) + _tag_list(_prop(work, "categories", [])),
+            warnings=_tag_list(_prop(work, "warnings", [])),
+            published_at=_work_date(work, "date_published"),
+            updated_at=_work_date(work, "date_updated", "date_published"),
             chapters=chapters_meta,
         )
 

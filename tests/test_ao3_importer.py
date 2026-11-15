@@ -201,6 +201,22 @@ def test_bad_login_raises_import_error(mock_session_cls):
 
 
 @patch("app.importers.ao3._load_work")
+@patch("app.importers.ao3.AO3.Session")
+def test_blocked_login_form_continues_without_session(mock_session_cls, mock_load):
+    """ao3-api raises TypeError when Cloudflare strips the authenticity_token input."""
+    mock_session_cls.side_effect = TypeError("'NoneType' object is not subscriptable")
+    mock_load.return_value = _fake_work()
+
+    with patch("app.importers.ao3._download_html_bytes", side_effect=ImportError_("skip")):
+        source = open_work(
+            "https://archiveofourown.org/works/999",
+            {"archiveofourown.org": ("u", "p")},
+        )
+    assert source.meta.title == "Test Work"
+    mock_load.assert_called_once_with(999, None)
+
+
+@patch("app.importers.ao3._load_work")
 def test_rate_limit_raises_import_error(mock_load):
     import AO3
 
