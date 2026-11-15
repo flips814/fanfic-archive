@@ -85,6 +85,9 @@ interface ApiService {
     @POST("api/comments/{id}/delete")
     suspend fun deleteComment(@Path("id") id: Int): OkResponse
 
+    @GET("api/notifications")
+    suspend fun notifications(@Query("limit") limit: Int = 50): StoryNotificationList
+
     @GET("api/settings")
     suspend fun getSettings(): NotificationSettings
 

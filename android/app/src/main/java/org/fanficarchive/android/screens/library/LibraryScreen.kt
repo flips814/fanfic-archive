@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.collectAsState
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.WorkSummary
 import org.fanficarchive.android.screens.components.ButtonLabel
@@ -64,6 +65,8 @@ fun LibraryScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val readingProgress by repository.readingProgressForCurrentServer()
+        .collectAsState(initial = emptyMap())
 
     fun refresh() {
         scope.launch {
@@ -200,7 +203,11 @@ fun LibraryScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     items(works, key = { it.id }) { work ->
-                        WorkCard(work = work, onClick = { onOpenWork(work.id) })
+                        WorkCard(
+                            work = work,
+                            onClick = { onOpenWork(work.id) },
+                            resumeChapter = readingProgress[work.id]?.chapterNumber,
+                        )
                     }
                 }
             }

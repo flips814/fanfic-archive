@@ -183,6 +183,7 @@ def info(db: Session = Depends(get_db)):
     """Public capability probe for mobile clients (no login required)."""
     return {
         "site_name": settings.site_name,
+        "base_url": settings.base_url,
         "api_version": API_VERSION,
         "auth": {
             "local": local_login_available(db),
@@ -543,7 +544,208 @@ def delete_comment(
     return {"ok": True}
 
 
-# ------------------------------------------------------------------ settings
+# ------------------------------------------------------------------ notifications / settings
+
+
+def _notification(
+    *,
+    kind: str,
+    title: str,
+    body: str,
+    created_at,
+    work_id: int | None = None,
+    work_title: str | None = None,
+    actor: User | None = None,
+    job_id: int | None = None,
+    ref_id: int | None = None,
+    chapters_added: int = 0,
+    status: str | None = None,
+) -> dict:
+    stamp = created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at)
+    return {
+        "id": f"{kind}:{ref_id or job_id or work_id or 0}:{stamp}",
+        "kind": kind,
+        "title": title,
+        "body": body,
+        "work_id": work_id,
+        "work_title": work_title,
+        "actor": _user(actor),
+        "job_id": job_id,
+        "chapters_added": chapters_added,
+        "status": status,
+        "created_at": created_at,
+    }
+
+
+@router.get("/notifications")
+def list_notifications(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Story activity for the signed-in user: imports, updates, comments, follows, job progress."""
+    limit = max(1, min(limit, 100))
+    followed_ids = set(db.scalars(select(Follow.work_id).where(Follow.user_id == user.id)))
+    owned_ids = set(db.scalars(select(Work.id).where(Work.added_by_id == user.id)))
+    watched = followed_ids | owned_ids
+    items: list[dict] = []
+
+    # New stories, chapter updates, and in-flight job progress.
+    jobs = db.scalars(select(ImportJob).order_by(ImportJob.id.desc()).limit(120)).all()
+    for job in jobs:
+        relevant = (
+            job.requested_by_id == user.id
+            or (job.work_id is not None and job.work_id in watched)
+            or job.kind == "import"
+        )
+        if not relevant:
+            continue
+        who = job.requested_by
+        title = job.work_title or job.url
+        if job.kind == "import" and job.status == "done":
+            items.append(
+                _notification(
+                    kind="story_added",
+                    title="New story added",
+                    body=f"{who.label if who else 'Someone'} imported “{title}”.",
+                    created_at=job.finished_at or job.created_at,
+                    work_id=job.work_id,
+                    work_title=job.work_title,
+                    actor=who,
+                    job_id=job.id,
+                    chapters_added=job.chapters_added,
+                    status=job.status,
+                )
+            )
+        elif job.kind == "update" and job.status == "done" and job.chapters_added > 0:
+            items.append(
+                _notification(
+                    kind="story_updated",
+                    title="Story updated",
+                    body=f"“{title}” gained {job.chapters_added} new chapter"
+                    f"{'' if job.chapters_added == 1 else 's'}.",
+                    created_at=job.finished_at or job.created_at,
+                    work_id=job.work_id,
+                    work_title=job.work_title,
+                    actor=who,
+                    job_id=job.id,
+                    chapters_added=job.chapters_added,
+                    status=job.status,
+                )
+            )
+        elif job.status in ("queued", "running"):
+            verb = "Importing" if job.kind == "import" else "Checking for updates on"
+            items.append(
+                _notification(
+                    kind="progress",
+                    title="Story progress",
+                    body=f"{verb} “{title}”… ({job.status})",
+                    created_at=job.started_at or job.created_at,
+                    work_id=job.work_id,
+                    work_title=job.work_title,
+                    actor=who,
+                    job_id=job.id,
+                    status=job.status,
+                )
+            )
+        elif job.status == "failed" and (
+            job.requested_by_id == user.id or (job.work_id is not None and job.work_id in watched)
+        ):
+            items.append(
+                _notification(
+                    kind="progress",
+                    title="Update failed",
+                    body=job.message or f"Couldn’t finish {job.kind} for “{title}”.",
+                    created_at=job.finished_at or job.created_at,
+                    work_id=job.work_id,
+                    work_title=job.work_title,
+                    actor=who,
+                    job_id=job.id,
+                    status=job.status,
+                )
+            )
+
+    # Comments on followed or owned works (not your own comments).
+    if watched:
+        recent_comments = db.scalars(
+            select(Comment)
+            .where(
+                Comment.work_id.in_(watched),
+                Comment.deleted.is_(False),
+                or_(Comment.user_id.is_(None), Comment.user_id != user.id),
+            )
+            .order_by(Comment.created_at.desc())
+            .limit(60)
+        ).all()
+        for comment in recent_comments:
+            work = comment.work
+            who = comment.user
+            preview = (comment.body or "").strip().replace("\n", " ")
+            if len(preview) > 120:
+                preview = preview[:117] + "…"
+            where = f"chapter {comment.chapter.number}" if comment.chapter_id and comment.chapter else "the work"
+            items.append(
+                _notification(
+                    kind="comment",
+                    title="New comment",
+                    body=f"{who.label if who else 'Someone'} commented on {where} of “{work.title if work else 'a work'}”"
+                    + (f": {preview}" if preview else "."),
+                    created_at=comment.created_at,
+                    work_id=comment.work_id,
+                    work_title=work.title if work else None,
+                    actor=who,
+                    ref_id=comment.id,
+                )
+            )
+
+    # You started following a story.
+    my_follows = db.scalars(
+        select(Follow).where(Follow.user_id == user.id).order_by(Follow.created_at.desc()).limit(40)
+    ).all()
+    for follow_row in my_follows:
+        work = follow_row.work
+        if work is None:
+            continue
+        items.append(
+            _notification(
+                kind="following",
+                title="Following a story",
+                body=f"You’re following “{work.title}”.",
+                created_at=follow_row.created_at,
+                work_id=work.id,
+                work_title=work.title,
+                actor=user,
+            )
+        )
+
+    # Someone else followed a story you added.
+    if owned_ids:
+        others = db.scalars(
+            select(Follow)
+            .where(Follow.work_id.in_(owned_ids), Follow.user_id != user.id)
+            .order_by(Follow.created_at.desc())
+            .limit(40)
+        ).all()
+        for follow_row in others:
+            work = follow_row.work
+            who = follow_row.user
+            if work is None:
+                continue
+            items.append(
+                _notification(
+                    kind="following",
+                    title="New follower",
+                    body=f"{who.label if who else 'Someone'} started following “{work.title}”.",
+                    created_at=follow_row.created_at,
+                    work_id=work.id,
+                    work_title=work.title,
+                    actor=who,
+                )
+            )
+
+    items.sort(key=lambda n: n["created_at"] or utcnow(), reverse=True)
+    items = items[:limit]
+    return {"notifications": items, "total": len(items)}
 
 
 @router.get("/settings")

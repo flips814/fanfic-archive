@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.CommentItem
 import org.fanficarchive.android.data.ReaderPrefs
+import org.fanficarchive.android.data.ReadingProgress
 import org.fanficarchive.android.data.WorkDetail
 import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.ErrorText
@@ -46,6 +47,7 @@ import org.fanficarchive.android.screens.components.HtmlPane
 import org.fanficarchive.android.screens.components.LoadingBox
 import org.fanficarchive.android.screens.components.MetaChip
 import org.fanficarchive.android.screens.components.PrimaryButton
+import org.fanficarchive.android.screens.components.QuietButton
 import org.fanficarchive.android.screens.components.SecondaryButton
 import org.fanficarchive.android.screens.components.SiteBadge
 import org.fanficarchive.android.screens.components.StatusPill
@@ -76,6 +78,9 @@ fun WorkDetailScreen(
     var translationEnabled by remember { mutableStateOf(false) }
     var translated by remember { mutableStateOf<TranslatedText?>(null) }
     val readerPrefs by repository.readerPrefs.collectAsState(initial = ReaderPrefs())
+    val progressMap by repository.readingProgressForCurrentServer()
+        .collectAsState(initial = emptyMap())
+    val bookmark: ReadingProgress? = progressMap[workId]
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -162,11 +167,17 @@ fun WorkDetailScreen(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         val firstChapter = detail.chapterList.firstOrNull()?.number
+                        val resumeChapter = bookmark?.chapterNumber
+                            ?.takeIf { number -> detail.chapterList.any { it.number == number } }
                         PrimaryButton(
-                            onClick = { firstChapter?.let(onOpenChapter) },
-                            enabled = firstChapter != null,
+                            onClick = { (resumeChapter ?: firstChapter)?.let(onOpenChapter) },
+                            enabled = (resumeChapter ?: firstChapter) != null,
                             modifier = Modifier.weight(1f),
-                        ) { ButtonLabel("Start reading") }
+                        ) {
+                            ButtonLabel(
+                                if (resumeChapter != null) "Continue · Ch $resumeChapter" else "Start reading",
+                            )
+                        }
                         SecondaryButton(
                             onClick = {
                                 scope.launch {
@@ -192,6 +203,13 @@ fun WorkDetailScreen(
                             modifier = Modifier.weight(1f),
                             filled = true,
                         ) { ButtonLabel("EPUB") }
+                    }
+                    if (bookmark != null) {
+                        QuietButton(
+                            onClick = {
+                                scope.launch { repository.clearReadingProgress(workId) }
+                            },
+                        ) { ButtonLabel("Clear bookmark") }
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         ToggleActionButton(
@@ -246,7 +264,14 @@ fun WorkDetailScreen(
                     TagGroup("Tags", detail.tags)
                     if (!displaySummary.isNullOrBlank()) {
                         Text("Summary", style = MaterialTheme.typography.titleMedium)
-                        HtmlPane(html = displaySummary, baseUrl = baseUrl, fontScale = 1f, theme = "site")
+                        HtmlPane(
+                            html = displaySummary,
+                            baseUrl = baseUrl,
+                            fontScale = 1f,
+                            theme = "app",
+                            blendWithApp = true,
+                            wrapContentHeight = true,
+                        )
                     }
                     Text("Chapters", style = MaterialTheme.typography.titleLarge)
                     detail.chapterList.forEach { chapter ->
