@@ -189,6 +189,18 @@ fun PublicPill(modifier: Modifier = Modifier) {
 }
 
 @Composable
+fun DownloadedPill(modifier: Modifier = Modifier) {
+    val color = MaterialTheme.colorScheme.tertiary
+    MetaChip(
+        text = "Downloaded",
+        modifier = modifier,
+        foreground = color,
+        background = color.copy(alpha = 0.12f),
+        border = color,
+    )
+}
+
+@Composable
 fun JobStatusPill(status: String, modifier: Modifier = Modifier) {
     val (bg, fg) = when (status) {
         "done" -> JobDone to Color.White
@@ -248,12 +260,14 @@ fun WorkCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     resumeChapter: Int? = null,
+    downloaded: Boolean = false,
 ) {
     FanficCard(modifier = modifier, onClick = onClick) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             SiteBadge(work.site)
             StatusPill(work.status)
             if (work.isPrivate) PrivatePill()
+            if (downloaded) DownloadedPill()
             if (work.isFollowing) FollowingPill()
             if (resumeChapter != null) {
                 MetaChip(

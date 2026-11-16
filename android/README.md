@@ -44,7 +44,8 @@ UI mirrors the website (Pico Violet): bottom nav for **Library**, **Add works**,
 - Add works (batch URL import) with Public / Private visibility for the whole batch
 - Activity log with kind/status filters (private imports only for the importer)
 - Users list with import stats
-- Work detail: follow, update check, Make private / Make public, auto-update, EPUB share, comments, delete, title/summary translation
+- Work detail: follow, update check, Make private / Make public, auto-update, **Download for offline**, EPUB share, comments, delete, title/summary translation
+- Offline reading: chapters saved on-device; library **Downloaded** filter; reader falls back when the server is unreachable
 - Chapter reader: full-page scroll, collapsible Translate + Reading settings, LibreTranslate
 - Local reading bookmarks (last chapter + scroll position) with Continue on work/library cards
 - Settings notifications feed (new stories, updates, comments, follows, import/update progress)

@@ -61,9 +61,11 @@ fun LibraryScreen(
     var status by remember { mutableStateOf("") }
     var visibility by remember { mutableStateOf("") }
     var followedOnly by remember { mutableStateOf(false) }
+    var downloadedOnly by remember { mutableStateOf(false) }
     var showFilters by remember { mutableStateOf(false) }
     var sites by remember { mutableStateOf<List<String>>(emptyList()) }
     var works by remember { mutableStateOf<List<WorkSummary>>(emptyList()) }
+    var downloadedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var total by remember { mutableStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -75,6 +77,33 @@ fun LibraryScreen(
         scope.launch {
             loading = true
             error = null
+            downloadedIds = repository.downloadedWorkIds()
+            if (downloadedOnly) {
+                var offline = repository.listOfflineWorks()
+                if (query.isNotBlank()) {
+                    val q = query.trim().lowercase()
+                    offline = offline.filter {
+                        it.title.lowercase().contains(q) || (it.author?.lowercase()?.contains(q) == true)
+                    }
+                }
+                if (visibility == VISIBILITY_PUBLIC) {
+                    offline = offline.filter { !it.isPrivate }
+                } else if (visibility == VISIBILITY_PRIVATE) {
+                    offline = offline.filter { it.isPrivate }
+                }
+                if (status == "complete") {
+                    offline = offline.filter { it.status?.lowercase()?.startsWith("complete") == true }
+                } else if (status == "ongoing") {
+                    offline = offline.filter { it.status?.lowercase()?.startsWith("complete") != true }
+                }
+                if (site.isNotBlank()) {
+                    offline = offline.filter { it.site == site }
+                }
+                works = offline
+                total = offline.size
+                loading = false
+                return@launch
+            }
             runCatching {
                 repository.listWorks(
                     query = query,
@@ -87,18 +116,30 @@ fun LibraryScreen(
                 works = it.works
                 total = it.total
                 if (it.sites.isNotEmpty()) sites = it.sites
-            }.onFailure { error = repository.errorMessage(it) }
+            }.onFailure { err ->
+                // If the server is down, still show local downloads.
+                val offline = repository.listOfflineWorks()
+                if (offline.isNotEmpty()) {
+                    works = offline
+                    total = offline.size
+                    error = null
+                    downloadedOnly = true
+                } else {
+                    error = repository.errorMessage(err)
+                }
+            }
             loading = false
         }
     }
 
-    LaunchedEffect(site, status, visibility, followedOnly) { refresh() }
+    LaunchedEffect(site, status, visibility, followedOnly, downloadedOnly) { refresh() }
 
     val activeFilters = listOfNotNull(
         site.ifBlank { null },
         status.ifBlank { null },
         visibility.ifBlank { null },
         if (followedOnly) "following" else null,
+        if (downloadedOnly) "downloaded" else null,
     ).size
 
     Scaffold(
@@ -154,7 +195,18 @@ fun LibraryScreen(
                         FilterTag(
                             label = "Following",
                             selected = followedOnly,
-                            onClick = { followedOnly = !followedOnly },
+                            onClick = {
+                                followedOnly = !followedOnly
+                                if (followedOnly) downloadedOnly = false
+                            },
+                        )
+                        FilterTag(
+                            label = "Downloaded",
+                            selected = downloadedOnly,
+                            onClick = {
+                                downloadedOnly = !downloadedOnly
+                                if (downloadedOnly) followedOnly = false
+                            },
                         )
                         FilterTag(
                             label = "Complete",
@@ -217,8 +269,10 @@ fun LibraryScreen(
                 loading -> LoadingBox()
                 error != null -> ErrorText(error!!)
                 works.isEmpty() -> EmptyState(
-                    "No works yet",
-                    if (query.isNotBlank() || activeFilters > 0) {
+                    if (downloadedOnly) "No downloads yet" else "No works yet",
+                    if (downloadedOnly) {
+                        "Open a work and tap Download for offline."
+                    } else if (query.isNotBlank() || activeFilters > 0) {
                         "Nothing matched these filters."
                     } else {
                         "Import a story URL from Add works."
@@ -233,6 +287,7 @@ fun LibraryScreen(
                             work = work,
                             onClick = { onOpenWork(work.id) },
                             resumeChapter = readingProgress[work.id]?.chapterNumber,
+                            downloaded = work.id in downloadedIds || downloadedOnly,
                         )
                     }
                 }

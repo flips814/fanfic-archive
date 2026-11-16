@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit
 class ArchiveRepository(
     private val prefs: ServerPreferences,
     private val cookieJar: SessionCookieJar,
+    private val offline: OfflineStore,
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -195,9 +196,124 @@ class ArchiveRepository(
         offset = offset,
     )
 
-    suspend fun getWork(id: Int): WorkDetail = api().getWork(id)
+    private suspend fun currentBaseUrl(): String {
+        val base = prefs.profile.first().baseUrl
+        if (base.isBlank()) throw IllegalStateException("No server configured")
+        return base.trimEnd('/')
+    }
 
-    suspend fun getChapter(workId: Int, number: Int): ChapterContent = api().getChapter(workId, number)
+    suspend fun getWork(id: Int): WorkDetail {
+        val base = runCatching { currentBaseUrl() }.getOrNull()
+        return runCatching { api().getWork(id) }
+            .getOrElse { err ->
+                val cached = base?.let { offline.loadWork(it, id)?.toWorkDetail() }
+                cached ?: throw err
+            }
+    }
+
+    suspend fun getChapter(workId: Int, number: Int): ChapterContent {
+        val base = runCatching { currentBaseUrl() }.getOrNull()
+        return runCatching { api().getChapter(workId, number) }
+            .getOrElse { err ->
+                val cached = base?.let { offline.loadWork(it, workId)?.toChapterContent(number) }
+                cached ?: throw err
+            }
+    }
+
+    suspend fun isWorkDownloaded(workId: Int): Boolean {
+        val base = prefs.profile.first().baseUrl.trimEnd('/')
+        if (base.isBlank()) return false
+        return offline.isDownloaded(base, workId)
+    }
+
+    suspend fun downloadedWorkIds(): Set<Int> {
+        val base = prefs.profile.first().baseUrl.trimEnd('/')
+        if (base.isBlank()) return emptySet()
+        return offline.downloadedWorkIds(base)
+    }
+
+    suspend fun listOfflineWorks(): List<WorkSummary> {
+        val base = prefs.profile.first().baseUrl.trimEnd('/')
+        if (base.isBlank()) return emptyList()
+        return offline.listDownloaded(base).map { it.toWorkSummary() }
+    }
+
+    suspend fun removeOfflineWork(workId: Int) {
+        val base = currentBaseUrl()
+        offline.deleteWork(base, workId)
+    }
+
+    /**
+     * Download the full work (metadata + every chapter) for offline reading.
+     * [onProgress] receives completed chapter count and total chapters.
+     */
+    suspend fun downloadWorkOffline(
+        workId: Int,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): OfflineWorkSnapshot {
+        val base = currentBaseUrl()
+        val detail = api().getWork(workId)
+        val chapterRefs = detail.chapterList.ifEmpty {
+            (1..detail.chapters.coerceAtLeast(0)).map { ChapterSummary(number = it, title = "Chapter $it") }
+        }
+        val total = chapterRefs.size
+        if (total == 0) throw IllegalStateException("This work has no chapters to download.")
+
+        val chapters = mutableListOf<OfflineChapter>()
+        var lastError: Throwable? = null
+        for ((index, ref) in chapterRefs.withIndex()) {
+            try {
+                val content = api().getChapter(workId, ref.number)
+                chapters += OfflineChapter(
+                    number = content.number,
+                    title = content.title,
+                    contentHtml = content.contentHtml,
+                    wordCount = content.wordCount,
+                    sourceUrl = content.sourceUrl,
+                )
+                onProgress(chapters.size, total)
+            } catch (err: Throwable) {
+                lastError = err
+                break
+            }
+            // Keep UI responsive between chapter fetches.
+            if (index < chapterRefs.lastIndex) kotlinx.coroutines.yield()
+        }
+
+        if (chapters.isEmpty()) {
+            throw lastError ?: IllegalStateException("Download failed")
+        }
+
+        val snapshot = OfflineWorkSnapshot(
+            workId = detail.id,
+            baseUrl = base,
+            title = detail.title,
+            author = detail.author,
+            site = detail.site,
+            sourceUrl = detail.sourceUrl,
+            status = detail.status,
+            rating = detail.rating,
+            language = detail.language,
+            languageCode = detail.languageCode,
+            wordCount = detail.wordCount,
+            visibility = detail.visibility,
+            summaryHtml = detail.summaryHtml,
+            fandoms = detail.fandoms,
+            relationships = detail.relationships,
+            characters = detail.characters,
+            tags = detail.tags,
+            warnings = detail.warnings,
+            chapterList = detail.chapterList,
+            chapters = chapters,
+        )
+        offline.saveWork(snapshot)
+        if (lastError != null && chapters.size < total) {
+            throw IllegalStateException(
+                "Downloaded ${chapters.size} of $total chapters, then failed: ${errorMessage(lastError)}",
+            )
+        }
+        return snapshot
+    }
 
     suspend fun setFollowing(workId: Int, follow: Boolean): FollowResponse =
         if (follow) api().follow(workId) else api().unfollow(workId)

@@ -283,6 +283,7 @@ fun ReaderScreen(
                                 "${formatNumber(ch.wordCount)} words",
                                 "about $minutes min",
                                 if (ch.commentCount > 0) "${ch.commentCount} comments" else null,
+                                if (ch.fromOffline) "Offline copy" else null,
                             ).joinToString(" · "),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

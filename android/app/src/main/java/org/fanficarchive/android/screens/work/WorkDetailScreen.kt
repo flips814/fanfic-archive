@@ -42,6 +42,7 @@ import org.fanficarchive.android.data.VISIBILITY_PRIVATE
 import org.fanficarchive.android.data.VISIBILITY_PUBLIC
 import org.fanficarchive.android.data.WorkDetail
 import org.fanficarchive.android.screens.components.ButtonLabel
+import org.fanficarchive.android.screens.components.DownloadedPill
 import org.fanficarchive.android.screens.components.ErrorText
 import org.fanficarchive.android.screens.components.FanficTextField
 import org.fanficarchive.android.screens.components.FollowingPill
@@ -81,6 +82,9 @@ fun WorkDetailScreen(
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var translationEnabled by remember { mutableStateOf(false) }
     var translated by remember { mutableStateOf<TranslatedText?>(null) }
+    var downloaded by remember { mutableStateOf(false) }
+    var downloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf<String?>(null) }
     val readerPrefs by repository.readerPrefs.collectAsState(initial = ReaderPrefs())
     val progressMap by repository.readingProgressForCurrentServer()
         .collectAsState(initial = emptyMap())
@@ -92,13 +96,15 @@ fun WorkDetailScreen(
         scope.launch {
             loading = true
             error = null
+            downloaded = repository.isWorkDownloaded(workId)
             runCatching {
                 val detail = repository.getWork(workId)
-                val thread = repository.listComments(workId)
+                val thread = runCatching { repository.listComments(workId) }.getOrNull()
                 detail to thread
             }.onSuccess { (detail, thread) ->
                 work = detail
-                comments = thread.comments
+                comments = thread?.comments.orEmpty()
+                if (detail.fromOffline) downloaded = true
             }.onFailure { error = repository.errorMessage(it) }
             loading = false
         }
@@ -145,11 +151,19 @@ fun WorkDetailScreen(
                         SiteBadge(detail.site)
                         StatusPill(detail.status)
                         if (detail.isPrivate) PrivatePill() else PublicPill()
+                        if (downloaded) DownloadedPill()
                         if (detail.isFollowing) FollowingPill()
                         if (detail.rating != null) {
                             MetaChip(text = detail.rating)
                         }
                         MetaChip(text = "${detail.commentCount} comments")
+                    }
+                    if (detail.fromOffline) {
+                        Text(
+                            "Showing your offline copy — connect to the server to refresh.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                     Text(displayTitle, style = MaterialTheme.typography.headlineSmall)
                     Text(
@@ -236,6 +250,46 @@ fun WorkDetailScreen(
                                 }
                             },
                         ) { ButtonLabel("Check updates") }
+                        if (downloaded) {
+                            SecondaryButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching { repository.removeOfflineWork(workId) }
+                                            .onSuccess {
+                                                downloaded = false
+                                                statusMessage = "Offline copy removed"
+                                            }
+                                            .onFailure { error = repository.errorMessage(it) }
+                                    }
+                                },
+                                enabled = !downloading,
+                            ) { ButtonLabel("Remove download") }
+                        } else {
+                            SecondaryButton(
+                                onClick = {
+                                    scope.launch {
+                                        downloading = true
+                                        downloadProgress = "Starting…"
+                                        error = null
+                                        runCatching {
+                                            repository.downloadWorkOffline(workId) { done, total ->
+                                                downloadProgress = "Downloading $done / $total"
+                                            }
+                                        }.onSuccess {
+                                            downloaded = true
+                                            downloadProgress = null
+                                            statusMessage = "Saved for offline reading"
+                                        }.onFailure {
+                                            downloaded = repository.isWorkDownloaded(workId)
+                                            downloadProgress = null
+                                            error = repository.errorMessage(it)
+                                        }
+                                        downloading = false
+                                    }
+                                },
+                                enabled = !downloading,
+                            ) { ButtonLabel(if (downloading) "Downloading…" else "Download for offline") }
+                        }
                         if (detail.canManage) {
                             SecondaryButton(
                                 onClick = {
@@ -288,6 +342,7 @@ fun WorkDetailScreen(
                         request = { to -> repository.requestWorkTranslation(workId, to) },
                         poll = { to -> repository.getWorkTranslation(workId, to) },
                     )
+                    downloadProgress?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                     statusMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     TagGroup("Fandoms", detail.fandoms)

@@ -2,6 +2,7 @@ package org.fanficarchive.android.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 data class ServerInfo(
@@ -126,6 +127,7 @@ data class WorkDetail(
     val warnings: List<String> = emptyList(),
     @SerialName("summary_html") val summaryHtml: String? = null,
     @SerialName("chapter_list") val chapterList: List<ChapterSummary> = emptyList(),
+    @Transient val fromOffline: Boolean = false,
 ) {
     val isPrivate: Boolean get() = visibility == VISIBILITY_PRIVATE
 }
@@ -149,6 +151,7 @@ data class ChapterContent(
     @SerialName("imported_at") val importedAt: String? = null,
     @SerialName("imported_by") val importedBy: UserRef? = null,
     @SerialName("comment_count") val commentCount: Int = 0,
+    @Transient val fromOffline: Boolean = false,
 )
 
 @Serializable
