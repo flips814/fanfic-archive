@@ -33,15 +33,18 @@ def _configuration(url: str) -> Configuration:
         config.add_section("overrides")
     except configparser.DuplicateSectionError:
         pass
-    # Skip inline chapter images, but allow a site-provided cover when present.
-    config.set("overrides", "include_images", "false")
+    # Download site-provided covers only (not inline chapter images). FanFicFare's
+    # setCoverImage() is a no-op when include_images is false.
+    config.set("overrides", "include_images", "coveronly")
     config.set("overrides", "never_make_cover", "false")
     config.set("overrides", "make_firstimage_cover", "false")
     if settings.fanficfare_is_adult:
         config.set("overrides", "is_adult", "true")
     if settings.flaresolverr_url and config.site in settings.flaresolverr_sites:
         proxy = urlparse(settings.flaresolverr_url)
-        config.set("overrides", "use_flaresolverr_proxy", "true")
+        # directimages: pages via FlareSolverr, cover bytes fetched normally.
+        # Plain "true" forces include_images off for FlareSolverr v2+.
+        config.set("overrides", "use_flaresolverr_proxy", "directimages")
         config.set("overrides", "flaresolverr_proxy_protocol", proxy.scheme or "http")
         config.set("overrides", "flaresolverr_proxy_address", proxy.hostname or "flaresolverr")
         config.set("overrides", "flaresolverr_proxy_port", str(proxy.port or 8191))

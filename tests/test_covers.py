@@ -47,6 +47,15 @@ def test_extract_cover_from_fff_img_store():
     assert mime == "image/jpeg"
 
 
+def test_fff_configuration_pulls_covers_only():
+    from app.importers import fanficfare_importer as ffi
+
+    config = ffi._configuration("https://www.wattpad.com/story/1")
+    assert config.get("overrides", "include_images") == "coveronly"
+    assert config.get("overrides", "never_make_cover") == "false"
+    assert config.get("overrides", "make_firstimage_cover") == "false"
+
+
 def test_persist_meta_cover_and_http(tmp_path, monkeypatch, fake_site, sent):
     monkeypatch.setattr(covers.settings, "covers_dir", str(tmp_path))
     meta = WorkMeta(

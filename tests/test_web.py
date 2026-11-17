@@ -138,10 +138,12 @@ def test_flaresolverr_only_for_listed_sites(monkeypatch):
 
     monkeypatch.setattr(ffi, "settings", replace(ffi.settings, flaresolverr_url="http://flaresolverr:8191"))
     ffn = ffi._configuration("https://www.fanfiction.net/s/1234567/1/")
-    assert ffn.get("overrides", "use_flaresolverr_proxy") == "true"
+    assert ffn.get("overrides", "include_images") == "coveronly"
+    assert ffn.get("overrides", "use_flaresolverr_proxy") == "directimages"
     assert ffn.get("overrides", "flaresolverr_proxy_address") == "flaresolverr"
     assert ffn.get("overrides", "flaresolverr_proxy_port") == "8191"
     ao3 = ffi._configuration("https://archiveofourown.org/works/1")
+    assert ao3.get("overrides", "include_images") == "coveronly"
     assert not ao3.has_option("overrides", "use_flaresolverr_proxy")
 
     monkeypatch.setattr(ffi, "settings", replace(ffi.settings, flaresolverr_url=""))
