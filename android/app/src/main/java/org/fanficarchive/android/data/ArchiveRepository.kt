@@ -432,6 +432,46 @@ class ArchiveRepository(
         return prefs.getReadingProgress(base, workId)
     }
 
+    /** Pull server bookmarks and merge with local by newest updatedAt; push newer locals. */
+    suspend fun syncReadingProgress() {
+        val base = prefs.profile.first().baseUrl
+        if (base.isBlank()) return
+        val remote = runCatching { api().listReadingProgress().progress }.getOrElse { return }
+        val local = prefs.readingProgressForServer(base).first()
+        val remoteByWork = remote.associateBy { it.workId }
+
+        for (dto in remote) {
+            val remoteAt = parseServerTime(dto.updatedAt) ?: continue
+            val existing = local[dto.workId]
+            if (existing == null || remoteAt > existing.updatedAt) {
+                prefs.saveReadingProgress(
+                    baseUrl = base,
+                    workId = dto.workId,
+                    chapterNumber = dto.chapterNumber,
+                    scrollOffset = if (existing?.chapterNumber == dto.chapterNumber) existing.scrollOffset else 0,
+                    scrollFraction = dto.scrollFraction.toFloat(),
+                    updatedAt = remoteAt,
+                )
+            }
+        }
+
+        for ((workId, progress) in local) {
+            val remoteDto = remoteByWork[workId]
+            val remoteAt = parseServerTime(remoteDto?.updatedAt) ?: 0L
+            if (remoteDto == null || progress.updatedAt > remoteAt) {
+                runCatching {
+                    api().putReadingProgress(
+                        workId,
+                        ReadingProgressUpdateRequest(
+                            chapterNumber = progress.chapterNumber,
+                            scrollFraction = progress.scrollFraction,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
     suspend fun saveReadingProgress(
         workId: Int,
         chapterNumber: Int,
@@ -440,13 +480,34 @@ class ArchiveRepository(
     ) {
         val base = prefs.profile.first().baseUrl
         if (base.isBlank()) return
-        prefs.saveReadingProgress(base, workId, chapterNumber, scrollOffset, scrollFraction)
+        val updatedAt = System.currentTimeMillis()
+        prefs.saveReadingProgress(base, workId, chapterNumber, scrollOffset, scrollFraction, updatedAt)
+        runCatching {
+            api().putReadingProgress(
+                workId,
+                ReadingProgressUpdateRequest(
+                    chapterNumber = chapterNumber,
+                    scrollFraction = scrollFraction,
+                ),
+            )
+        }
     }
 
     suspend fun clearReadingProgress(workId: Int) {
         val base = prefs.profile.first().baseUrl
         if (base.isBlank()) return
         prefs.clearReadingProgress(base, workId)
+        runCatching { api().deleteReadingProgress(workId) }
+    }
+
+    private fun parseServerTime(raw: String?): Long? {
+        if (raw.isNullOrBlank()) return null
+        return runCatching {
+            java.time.Instant.parse(raw).toEpochMilli()
+        }.recoverCatching {
+            // FastAPI may emit "+00:00" instead of Z.
+            java.time.OffsetDateTime.parse(raw).toInstant().toEpochMilli()
+        }.getOrNull()
     }
 
     suspend fun translateLanguages(sourceLanguageCode: String? = null): TranslateLanguagesResponse =

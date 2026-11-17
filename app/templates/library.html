@@ -90,6 +90,7 @@
         {{ status_pill(work.status) }}
         {% if work.is_private %}<span class="pill pill-private">Private</span>{% endif %}
         {% if work.id in followed %}<span class="pill pill-following">{{ icon("star") }} Following</span>{% endif %}
+        {% if work.id in reading_progress %}<span class="pill">Continue · Ch {{ reading_progress[work.id] }}</span>{% endif %}
       </div>
       <h2 class="card-title"><a href="/works/{{ work.id }}">{{ work.title }}</a></h2>
       <p class="byline">by {{ work.author or "unknown author" }}</p>

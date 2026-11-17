@@ -70,6 +70,7 @@ data class WorkSummary(
     @SerialName("is_following") val isFollowing: Boolean = false,
     val visibility: String = VISIBILITY_PUBLIC,
     @SerialName("cover_url") val coverUrl: String? = null,
+    @SerialName("resume_chapter") val resumeChapter: Int? = null,
 ) {
     val isPrivate: Boolean get() = visibility == VISIBILITY_PRIVATE
 }
@@ -129,6 +130,7 @@ data class WorkDetail(
     @SerialName("summary_html") val summaryHtml: String? = null,
     @SerialName("chapter_list") val chapterList: List<ChapterSummary> = emptyList(),
     @SerialName("cover_url") val coverUrl: String? = null,
+    @SerialName("resume_chapter") val resumeChapter: Int? = null,
     @Transient val fromOffline: Boolean = false,
 ) {
     val isPrivate: Boolean get() = visibility == VISIBILITY_PRIVATE
@@ -308,6 +310,30 @@ data class StoryNotification(
 data class StoryNotificationList(
     val notifications: List<StoryNotification> = emptyList(),
     val total: Int = 0,
+)
+
+@Serializable
+data class ReadingProgressDto(
+    @SerialName("work_id") val workId: Int,
+    @SerialName("chapter_number") val chapterNumber: Int,
+    @SerialName("scroll_fraction") val scrollFraction: Double = 0.0,
+    @SerialName("updated_at") val updatedAt: String? = null,
+)
+
+@Serializable
+data class ReadingProgressListResponse(
+    val progress: List<ReadingProgressDto> = emptyList(),
+)
+
+@Serializable
+data class ReadingProgressResponse(
+    val progress: ReadingProgressDto? = null,
+)
+
+@Serializable
+data class ReadingProgressUpdateRequest(
+    @SerialName("chapter_number") val chapterNumber: Int,
+    @SerialName("scroll_fraction") val scrollFraction: Float = 0f,
 )
 
 @Serializable

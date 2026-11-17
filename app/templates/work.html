@@ -27,7 +27,13 @@
   </p>
 
   <div class="actions">
-    {% if work.chapters %}<a role="button" href="/works/{{ work.id }}/chapters/{{ work.chapters[0].number }}">{{ icon("book") }} Start reading</a>{% endif %}
+    {% if work.chapters %}
+      {% if resume_chapter %}
+        <a role="button" href="/works/{{ work.id }}/chapters/{{ resume_chapter }}">{{ icon("book") }} Continue · Ch {{ resume_chapter }}</a>
+      {% else %}
+        <a role="button" href="/works/{{ work.id }}/chapters/{{ work.chapters[0].number }}">{{ icon("book") }} Start reading</a>
+      {% endif %}
+    {% endif %}
     <a role="button" class="secondary" href="/works/{{ work.id }}/epub">{{ icon("download") }} Download EPUB</a>
     <form method="post" action="/works/{{ work.id }}/check"><button class="secondary outline">{{ icon("refresh") }} Check for updates now</button></form>
     {% if is_following %}

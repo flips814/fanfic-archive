@@ -79,6 +79,9 @@ fun LibraryScreen(
             loading = true
             error = null
             downloadedIds = repository.downloadedWorkIds()
+            if (!downloadedOnly) {
+                runCatching { repository.syncReadingProgress() }
+            }
             if (downloadedOnly) {
                 var offline = repository.listOfflineWorks()
                 if (query.isNotBlank()) {
@@ -287,7 +290,8 @@ fun LibraryScreen(
                         WorkCard(
                             work = work,
                             onClick = { onOpenWork(work.id) },
-                            resumeChapter = readingProgress[work.id]?.chapterNumber,
+                            resumeChapter = readingProgress[work.id]?.chapterNumber
+                                ?: work.resumeChapter,
                             downloaded = work.id in downloadedIds || downloadedOnly,
                             baseUrl = baseUrl,
                         )

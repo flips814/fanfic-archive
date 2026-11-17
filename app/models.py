@@ -4,6 +4,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -230,6 +231,21 @@ class Follow(Base):
 
     user: Mapped[User] = relationship()
     work: Mapped[Work] = relationship(back_populates="followers")
+
+
+class ReadingProgress(Base):
+    """Where a user left off in a work (synced across web and Android)."""
+
+    __tablename__ = "reading_progress"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    work_id: Mapped[int] = mapped_column(ForeignKey("works.id", ondelete="CASCADE"), primary_key=True)
+    chapter_number: Mapped[int] = mapped_column(Integer)
+    scroll_fraction: Mapped[float] = mapped_column(Float, default=0.0, server_default=text("0"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    user: Mapped[User] = relationship()
+    work: Mapped[Work] = relationship()
 
 
 class ImportJob(Base):

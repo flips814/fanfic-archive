@@ -140,6 +140,7 @@ class ServerPreferences(private val context: Context) {
         chapterNumber: Int,
         scrollOffset: Int,
         scrollFraction: Float = 0f,
+        updatedAt: Long = System.currentTimeMillis(),
     ) {
         val key = progressKey(baseUrl, workId)
         context.dataStore.edit { prefs ->
@@ -148,7 +149,7 @@ class ServerPreferences(private val context: Context) {
                 chapterNumber = chapterNumber,
                 scrollOffset = scrollOffset.coerceAtLeast(0),
                 scrollFraction = scrollFraction.coerceIn(0f, 1f),
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = updatedAt,
             )
             prefs[readingProgressKey] = json.encodeToString(map)
         }

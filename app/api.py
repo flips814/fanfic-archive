@@ -25,7 +25,7 @@ from app.config import settings
 from app.db import get_db
 from app.importers import is_supported
 from app.jobs import enqueue_import, enqueue_update, follow
-from app.models import Chapter, Comment, Follow, ImportJob, User, Work, utcnow
+from app.models import Chapter, Comment, Follow, ImportJob, ReadingProgress, User, Work, utcnow
 
 router = APIRouter(prefix="/api")
 
@@ -35,6 +35,11 @@ API_VERSION = 1
 class ImportRequest(BaseModel):
     urls: list[str]
     visibility: str = VISIBILITY_PUBLIC
+
+
+class ReadingProgressUpdate(BaseModel):
+    chapter_number: int
+    scroll_fraction: float = 0.0
 
 
 class LoginRequest(BaseModel):
@@ -84,6 +89,15 @@ def _chapter_summary(c: Chapter, comment_count: int | None = None) -> dict:
     return data
 
 
+def _progress(p: ReadingProgress) -> dict:
+    return {
+        "work_id": p.work_id,
+        "chapter_number": p.chapter_number,
+        "scroll_fraction": float(p.scroll_fraction or 0),
+        "updated_at": p.updated_at,
+    }
+
+
 def _work(
     w: Work,
     full: bool = False,
@@ -91,6 +105,8 @@ def _work(
     can_manage: bool | None = None,
     chapter_comment_counts: dict[int, int] | None = None,
     comment_count: int | None = None,
+    resume_chapter: int | None = None,
+    reading_progress: ReadingProgress | None = None,
 ) -> dict:
     data = {
         "id": w.id,
@@ -123,6 +139,13 @@ def _work(
         data["can_manage"] = can_manage
     if comment_count is not None:
         data["comment_count"] = comment_count
+    if reading_progress is not None:
+        data["resume_chapter"] = reading_progress.chapter_number
+        data["reading_progress"] = _progress(reading_progress)
+    elif resume_chapter is not None:
+        data["resume_chapter"] = resume_chapter
+    else:
+        data["resume_chapter"] = None
     if full:
         counts = chapter_comment_counts or {}
         data.update(
@@ -283,11 +306,25 @@ def list_works(
         .limit(limit)
     ).all()
     followed_ids = set(db.scalars(select(Follow.work_id).where(Follow.user_id == user.id)))
+    progress_by_work: dict[int, ReadingProgress] = {}
+    if works:
+        progress_by_work = {
+            p.work_id: p
+            for p in db.scalars(
+                select(ReadingProgress).where(
+                    ReadingProgress.user_id == user.id,
+                    ReadingProgress.work_id.in_([w.id for w in works]),
+                )
+            ).all()
+        }
     sites = db.scalars(
         select(Work.site).where(visible_works_clause(user)).distinct().order_by(Work.site)
     ).all()
     return {
-        "works": [_work(w, is_following=w.id in followed_ids) for w in works],
+        "works": [
+            _work(w, is_following=w.id in followed_ids, reading_progress=progress_by_work.get(w.id))
+            for w in works
+        ],
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -299,6 +336,7 @@ def list_works(
 def get_work(work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     work = _get_work(db, work_id, user)
     work_comments = comments.thread(db, work.id, None)
+    progress = db.get(ReadingProgress, (user.id, work.id))
     return _work(
         work,
         full=True,
@@ -306,6 +344,7 @@ def get_work(work_id: int, db: Session = Depends(get_db), user: User = Depends(c
         can_manage=user.is_admin or work.added_by_id == user.id,
         chapter_comment_counts=comments.chapter_counts(db, work.id),
         comment_count=comments.visible_count(work_comments),
+        reading_progress=progress,
     )
 
 
@@ -380,6 +419,72 @@ def delete_work(work_id: int, db: Session = Depends(get_db), user: User = Depend
     db.commit()
     covers.delete_cover(work_id)
     return {"ok": True, "title": title}
+
+
+# ------------------------------------------------------------------ reading progress
+
+
+@router.get("/reading-progress")
+def list_reading_progress(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    rows = db.scalars(
+        select(ReadingProgress)
+        .where(ReadingProgress.user_id == user.id)
+        .order_by(ReadingProgress.updated_at.desc())
+    ).all()
+    # Drop bookmarks for works the user can no longer see.
+    visible = []
+    for row in rows:
+        work = db.get(Work, row.work_id)
+        if work and can_view(user, work):
+            visible.append(_progress(row))
+    return {"progress": visible}
+
+
+@router.get("/works/{work_id}/reading-progress")
+def get_reading_progress(work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _get_work(db, work_id, user)
+    row = db.get(ReadingProgress, (user.id, work_id))
+    if row is None:
+        return {"progress": None}
+    return {"progress": _progress(row)}
+
+
+@router.put("/works/{work_id}/reading-progress")
+def put_reading_progress(
+    work_id: int,
+    body: ReadingProgressUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    work = _get_work(db, work_id, user)
+    if body.chapter_number < 1:
+        raise HTTPException(400, "chapter_number must be >= 1")
+    numbers = {c.number for c in work.chapters}
+    if numbers and body.chapter_number not in numbers:
+        raise HTTPException(400, "chapter_number is not part of this work")
+    fraction = max(0.0, min(1.0, float(body.scroll_fraction or 0)))
+    row = db.get(ReadingProgress, (user.id, work_id))
+    if row is None:
+        row = ReadingProgress(user_id=user.id, work_id=work_id)
+        db.add(row)
+    row.chapter_number = body.chapter_number
+    row.scroll_fraction = fraction
+    row.updated_at = utcnow()
+    db.commit()
+    db.refresh(row)
+    return {"progress": _progress(row)}
+
+
+@router.delete("/works/{work_id}/reading-progress")
+def delete_reading_progress(
+    work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    _get_work(db, work_id, user)
+    row = db.get(ReadingProgress, (user.id, work_id))
+    if row is not None:
+        db.delete(row)
+        db.commit()
+    return {"ok": True}
 
 
 class VisibilityUpdate(BaseModel):

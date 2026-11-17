@@ -6,6 +6,7 @@ import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -40,6 +41,21 @@ interface ApiService {
 
     @GET("api/works/{id}")
     suspend fun getWork(@Path("id") id: Int): WorkDetail
+
+    @GET("api/reading-progress")
+    suspend fun listReadingProgress(): ReadingProgressListResponse
+
+    @GET("api/works/{id}/reading-progress")
+    suspend fun getReadingProgress(@Path("id") id: Int): ReadingProgressResponse
+
+    @PUT("api/works/{id}/reading-progress")
+    suspend fun putReadingProgress(
+        @Path("id") id: Int,
+        @Body body: ReadingProgressUpdateRequest,
+    ): ReadingProgressResponse
+
+    @DELETE("api/works/{id}/reading-progress")
+    suspend fun deleteReadingProgress(@Path("id") id: Int): OkResponse
 
     @GET("api/works/{id}/chapters/{number}")
     suspend fun getChapter(@Path("id") id: Int, @Path("number") number: Int): ChapterContent

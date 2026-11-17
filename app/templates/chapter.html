@@ -65,7 +65,7 @@
   </div>
 </div>
 
-<article class="reader" data-reader {% if work.language|lang_code %}lang="{{ work.language|lang_code }}"{% endif %}>
+<article class="reader" data-reader data-work-id="{{ work.id }}" data-chapter-number="{{ chapter.number }}" {% if work.language|lang_code %}lang="{{ work.language|lang_code }}"{% endif %}>
   <header class="reader-head">
     <p class="reader-kicker">Chapter {{ chapter.number }} of {{ work.chapters|length }}</p>
     <h1 data-translate-title>{{ chapter.title }}</h1>

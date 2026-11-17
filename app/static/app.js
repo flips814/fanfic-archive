@@ -147,18 +147,63 @@
     if (link) { e.preventDefault(); window.location.href = link.href; }
   });
 
-  // Reading progress bar.
+  // Reading progress bar + synced bookmark for Continue reading.
   var bar = document.querySelector(".read-progress span");
-  if (bar) {
+  var workId = reader && reader.getAttribute("data-work-id");
+  var chapterNumber = reader && reader.getAttribute("data-chapter-number");
+  var lastFraction = 0;
+  var saveTimer = null;
+
+  function scrollFraction() {
+    if (!reader) return 0;
+    var rect = reader.getBoundingClientRect();
+    var total = rect.height - window.innerHeight;
+    return total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 1;
+  }
+
+  function saveProgress(fraction, keepalive) {
+    if (!workId || !chapterNumber) return;
+    fetch("/api/works/" + workId + "/reading-progress", {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        chapter_number: parseInt(chapterNumber, 10),
+        scroll_fraction: fraction
+      }),
+      keepalive: !!keepalive
+    }).catch(function () { /* offline / transient */ });
+  }
+
+  function scheduleSave(fraction) {
+    lastFraction = fraction;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      saveTimer = null;
+      saveProgress(lastFraction, false);
+    }, 800);
+  }
+
+  if (bar || (workId && chapterNumber)) {
     var update = function () {
-      var rect = reader.getBoundingClientRect();
-      var total = rect.height - window.innerHeight;
-      var done = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 1;
-      bar.style.width = (done * 100).toFixed(1) + "%";
+      var done = scrollFraction();
+      if (bar) bar.style.width = (done * 100).toFixed(1) + "%";
+      if (workId && chapterNumber) scheduleSave(done);
     };
     window.addEventListener("scroll", update, { passive: true });
     window.addEventListener("resize", update);
     update();
+    if (workId && chapterNumber) {
+      // Mark this chapter as the resume point immediately on open.
+      saveProgress(scrollFraction(), false);
+      window.addEventListener("pagehide", function () {
+        if (saveTimer) {
+          clearTimeout(saveTimer);
+          saveTimer = null;
+        }
+        saveProgress(scrollFraction(), true);
+      });
+    }
   }
 })();
 

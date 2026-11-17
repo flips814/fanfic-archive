@@ -99,6 +99,7 @@ fun WorkDetailScreen(
             loading = true
             error = null
             downloaded = repository.isWorkDownloaded(workId)
+            runCatching { repository.syncReadingProgress() }
             runCatching {
                 val detail = repository.getWork(workId)
                 val thread = runCatching { repository.listComments(workId) }.getOrNull()
@@ -198,7 +199,7 @@ fun WorkDetailScreen(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         val firstChapter = detail.chapterList.firstOrNull()?.number
-                        val resumeChapter = bookmark?.chapterNumber
+                        val resumeChapter = (bookmark?.chapterNumber ?: detail.resumeChapter)
                             ?.takeIf { number -> detail.chapterList.any { it.number == number } }
                         PrimaryButton(
                             onClick = { (resumeChapter ?: firstChapter)?.let(onOpenChapter) },

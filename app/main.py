@@ -31,7 +31,7 @@ from app.epub import build_epub
 from app.importers import is_supported, site_label
 from app.jobs import enqueue_import, enqueue_update, follow
 from app.logins import LOGIN_SITES, delete_login, save_login, user_logins
-from app.models import Chapter, Comment, Follow, ImportJob, User, Work, utcnow
+from app.models import Chapter, Comment, Follow, ImportJob, ReadingProgress, User, Work, utcnow
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("web")
@@ -255,6 +255,18 @@ def library(
         .limit(PAGE_SIZE)
     ).all()
     followed = set(db.scalars(select(Follow.work_id).where(Follow.user_id == user.id)))
+    work_ids = [work.id for work, _ in rows]
+    reading_progress = {}
+    if work_ids:
+        reading_progress = {
+            p.work_id: p.chapter_number
+            for p in db.scalars(
+                select(ReadingProgress).where(
+                    ReadingProgress.user_id == user.id,
+                    ReadingProgress.work_id.in_(work_ids),
+                )
+            ).all()
+        }
     sites = db.scalars(
         select(Work.site).where(visible_works_clause(user)).distinct().order_by(Work.site)
     ).all()
@@ -268,6 +280,7 @@ def library(
         page=page,
         pages=max(1, -(-total // PAGE_SIZE)),
         followed=followed,
+        reading_progress=reading_progress,
         sites=sites,
         users=users,
         filters={
@@ -327,6 +340,7 @@ def work_detail(
         select(ImportJob).where(ImportJob.work_id == work.id).order_by(ImportJob.created_at.desc()).limit(25)
     ).all()
     work_comments = comments.thread(db, work.id, None)
+    progress = db.get(ReadingProgress, (user.id, work.id))
     return render(
         request,
         "work.html",
@@ -338,6 +352,7 @@ def work_detail(
         comments=work_comments,
         comment_count=comments.visible_count(work_comments),
         chapter_comment_counts=comments.chapter_counts(db, work.id),
+        resume_chapter=progress.chapter_number if progress else None,
     )
 
 
