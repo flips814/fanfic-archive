@@ -257,7 +257,13 @@ fun FilterTag(
 
 fun absoluteMediaUrl(baseUrl: String, path: String?): String? {
     if (path.isNullOrBlank()) return null
-    if (path.startsWith("http://") || path.startsWith("https://")) return path
+    if (
+        path.startsWith("http://") ||
+        path.startsWith("https://") ||
+        path.startsWith("file:")
+    ) {
+        return path
+    }
     return baseUrl.trimEnd('/') + (if (path.startsWith("/")) path else "/$path")
 }
 

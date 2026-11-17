@@ -43,7 +43,7 @@ data class OfflineWorkSnapshot(
     val chapters: List<OfflineChapter> = emptyList(),
     val coverUrl: String? = null,
 ) {
-    fun toWorkSummary(): WorkSummary = WorkSummary(
+    fun toWorkSummary(localCoverUri: String? = null): WorkSummary = WorkSummary(
         id = workId,
         title = title,
         author = author,
@@ -55,10 +55,10 @@ data class OfflineWorkSnapshot(
         chapters = chapters.size.coerceAtLeast(chapterList.size),
         fandoms = fandoms,
         visibility = visibility,
-        coverUrl = coverUrl,
+        coverUrl = localCoverUri ?: coverUrl,
     )
 
-    fun toWorkDetail(): WorkDetail = WorkDetail(
+    fun toWorkDetail(localCoverUri: String? = null): WorkDetail = WorkDetail(
         id = workId,
         title = title,
         author = author,
@@ -80,7 +80,7 @@ data class OfflineWorkSnapshot(
         chapterList = chapterList.ifEmpty {
             chapters.map { ChapterSummary(number = it.number, title = it.title, wordCount = it.wordCount) }
         },
-        coverUrl = coverUrl,
+        coverUrl = localCoverUri ?: coverUrl,
         fromOffline = true,
     )
 
@@ -125,9 +125,23 @@ class OfflineStore(context: Context) {
     private fun workFile(baseUrl: String, workId: Int): File =
         File(serverDir(baseUrl), "work-$workId.json")
 
+    private fun coverFile(baseUrl: String, workId: Int): File =
+        File(serverDir(baseUrl), "work-$workId.cover")
+
+    /** file:// URI for a cached cover, if present. */
+    fun localCoverUri(baseUrl: String, workId: Int): String? {
+        val file = coverFile(baseUrl, workId)
+        return if (file.isFile && file.length() > 0L) file.toURI().toString() else null
+    }
+
     suspend fun saveWork(snapshot: OfflineWorkSnapshot) = withContext(Dispatchers.IO) {
         val file = workFile(snapshot.baseUrl, snapshot.workId)
         file.writeText(json.encodeToString(snapshot))
+    }
+
+    suspend fun saveCover(baseUrl: String, workId: Int, bytes: ByteArray) = withContext(Dispatchers.IO) {
+        if (bytes.isEmpty()) return@withContext
+        coverFile(baseUrl, workId).writeBytes(bytes)
     }
 
     suspend fun loadWork(baseUrl: String, workId: Int): OfflineWorkSnapshot? = withContext(Dispatchers.IO) {
@@ -157,6 +171,7 @@ class OfflineStore(context: Context) {
 
     suspend fun deleteWork(baseUrl: String, workId: Int) = withContext(Dispatchers.IO) {
         workFile(baseUrl, workId).delete()
+        coverFile(baseUrl, workId).delete()
         Unit
     }
 }

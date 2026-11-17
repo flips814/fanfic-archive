@@ -206,7 +206,9 @@ class ArchiveRepository(
         val base = runCatching { currentBaseUrl() }.getOrNull()
         return runCatching { api().getWork(id) }
             .getOrElse { err ->
-                val cached = base?.let { offline.loadWork(it, id)?.toWorkDetail() }
+                val cached = base?.let { url ->
+                    offline.loadWork(url, id)?.toWorkDetail(offline.localCoverUri(url, id))
+                }
                 cached ?: throw err
             }
     }
@@ -235,7 +237,9 @@ class ArchiveRepository(
     suspend fun listOfflineWorks(): List<WorkSummary> {
         val base = prefs.profile.first().baseUrl.trimEnd('/')
         if (base.isBlank()) return emptyList()
-        return offline.listDownloaded(base).map { it.toWorkSummary() }
+        return offline.listDownloaded(base).map { snap ->
+            snap.toWorkSummary(offline.localCoverUri(snap.baseUrl, snap.workId))
+        }
     }
 
     suspend fun removeOfflineWork(workId: Int) {
@@ -308,12 +312,31 @@ class ArchiveRepository(
             coverUrl = detail.coverUrl,
         )
         offline.saveWork(snapshot)
+        downloadCoverForOffline(base, detail.id, detail.coverUrl)
         if (lastError != null && chapters.size < total) {
             throw IllegalStateException(
                 "Downloaded ${chapters.size} of $total chapters, then failed: ${errorMessage(lastError)}",
             )
         }
         return snapshot
+    }
+
+    private suspend fun downloadCoverForOffline(baseUrl: String, workId: Int, coverUrl: String?) {
+        if (coverUrl.isNullOrBlank()) return
+        val absolute = if (coverUrl.startsWith("http://") || coverUrl.startsWith("https://")) {
+            coverUrl
+        } else {
+            baseUrl.trimEnd('/') + (if (coverUrl.startsWith("/")) coverUrl else "/$coverUrl")
+        }
+        val bytes = withContext(Dispatchers.IO) {
+            runCatching {
+                client.newCall(Request.Builder().url(absolute).get().build()).execute().use { resp ->
+                    if (!resp.isSuccessful) return@runCatching null
+                    resp.body?.bytes()?.takeIf { it.isNotEmpty() }
+                }
+            }.getOrNull()
+        } ?: return
+        offline.saveCover(baseUrl, workId, bytes)
     }
 
     suspend fun setFollowing(workId: Int, follow: Boolean): FollowResponse =

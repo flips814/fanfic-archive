@@ -13,7 +13,7 @@ from fanficfare import exceptions as fff_exceptions
 from fanficfare.configurable import Configuration
 
 from app.config import settings
-from app.covers import extract_cover_from_fff_story
+from app.covers import extract_cover_from_fff_story, fetch_wattpad_cover
 from app.importers.base import ChapterRef, Importer, ImportError_, WorkMeta, WorkSource
 
 log = logging.getLogger(__name__)
@@ -38,6 +38,8 @@ def _configuration(url: str) -> Configuration:
     config.set("overrides", "include_images", "coveronly")
     config.set("overrides", "never_make_cover", "false")
     config.set("overrides", "make_firstimage_cover", "false")
+    # Wattpad chapter banner images are not story covers; skip them.
+    config.set("overrides", "include_chapter_banner_images", "false")
     if settings.fanficfare_is_adult:
         config.set("overrides", "is_adult", "true")
     if settings.flaresolverr_url and config.site in settings.flaresolverr_sites:
@@ -89,6 +91,15 @@ class FanFicFareSource(WorkSource):
                 config.set("overrides", "username", username)
                 config.set("overrides", "password", password)
                 self.adapter.username, self.adapter.password = username, password
+            # Wattpad calls setCoverImage even when cover is empty; skip blank URLs.
+            _orig_set_cover = self.adapter.setCoverImage
+
+            def _safe_set_cover(storyurl, imgurl, *args, **kwargs):
+                if not imgurl:
+                    return None, None
+                return _orig_set_cover(storyurl, imgurl, *args, **kwargs)
+
+            self.adapter.setCoverImage = _safe_set_cover  # type: ignore[method-assign]
             story = self.adapter.getStoryMetadataOnly(get_cover=True)
         except fff_exceptions.UnknownSite as e:
             raise ImportError_(f"Unsupported site: {url}") from e
@@ -127,6 +138,14 @@ class FanFicFareSource(WorkSource):
                 return []
 
         cover_url, cover_data, cover_ext, cover_mime = extract_cover_from_fff_story(story)
+        # Wattpad exposes covers on its story API; use that when FFF didn't keep bytes.
+        if self.adapter.getSiteDomain() == "www.wattpad.com" and not cover_data:
+            story_id = meta("storyId") or getattr(self.adapter, "storyId", None)
+            wp_url, wp_data, wp_ext, wp_mime = fetch_wattpad_cover(story_id)
+            cover_url = cover_url or wp_url
+            cover_data = wp_data
+            cover_ext = cover_ext or wp_ext
+            cover_mime = cover_mime or wp_mime
         self.meta = WorkMeta(
             site=self.adapter.getSiteDomain(),
             url=meta("storyUrl") or self.adapter.url,

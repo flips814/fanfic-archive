@@ -52,13 +52,19 @@ def public_cover_url(work_id: int) -> str | None:
     return f"{settings.base_url}{path}" if path else None
 
 
+_COVER_HEADERS = {"User-Agent": "FanficArchive/1.0 (+cover fetch)"}
+_WATTPAD_STORY_API = "https://www.wattpad.com/api/v3/stories/{story_id}?fields=cover"
+
+
 def fetch_cover_bytes(url: str, timeout: int = 30) -> tuple[bytes | None, str | None]:
     """Download a cover image. Returns (data, mime) or (None, None)."""
+    if not url:
+        return None, None
     try:
         response = requests.get(
             url,
             timeout=timeout,
-            headers={"User-Agent": "FanficArchive/1.0 (+cover fetch)"},
+            headers=_COVER_HEADERS,
             stream=True,
         )
         response.raise_for_status()
@@ -73,6 +79,41 @@ def fetch_cover_bytes(url: str, timeout: int = 30) -> tuple[bytes | None, str | 
     except Exception:
         log.warning("Failed to fetch cover from %s", url, exc_info=True)
         return None, None
+
+
+def wattpad_cover_url(story_id: str | int | None, timeout: int = 30) -> str | None:
+    """Return the Wattpad story cover URL when the API provides one."""
+    if not story_id:
+        return None
+    try:
+        response = requests.get(
+            _WATTPAD_STORY_API.format(story_id=story_id),
+            timeout=timeout,
+            headers=_COVER_HEADERS,
+        )
+        response.raise_for_status()
+        cover = (response.json() or {}).get("cover") or ""
+    except Exception:
+        log.warning("Failed to look up Wattpad cover for story %s", story_id, exc_info=True)
+        return None
+    if not isinstance(cover, str) or not cover.strip():
+        return None
+    # FanFicFare upgrades the thumbnail size when available.
+    return cover.replace("-256-", "-512-").strip()
+
+
+def fetch_wattpad_cover(
+    story_id: str | int | None, timeout: int = 30
+) -> tuple[str | None, bytes | None, str | None, str | None]:
+    """Fetch a Wattpad cover if the story has one. Returns (url, data, ext, mime)."""
+    url = wattpad_cover_url(story_id, timeout=timeout)
+    if not url:
+        return None, None, None, None
+    data, mime = fetch_cover_bytes(url, timeout=timeout)
+    if not data:
+        return url, None, None, mime
+    ext = (_EXT_FOR_MIME.get((mime or "").lower()) or ".jpg").lstrip(".")
+    return url, data, ext, mime
 
 
 def persist_meta_cover(work_id: int, meta) -> str | None:
@@ -140,9 +181,13 @@ def extract_cover_from_fff_story(story) -> tuple[str | None, bytes | None, str |
     """Return (source_url, data, ext, mime) from a FanFicFare Story after metadata+cover fetch."""
 
     def _from_info(info) -> tuple[str | None, bytes | None, str | None, str | None] | None:
-        if isinstance(info, dict) and info.get("data"):
-            return info.get("url"), info["data"], info.get("ext"), info.get("mime")
-        return None
+        if not isinstance(info, dict):
+            return None
+        url = info.get("url")
+        data = info.get("data")
+        if not data and not url:
+            return None
+        return url, data, info.get("ext"), info.get("mime")
 
     # FanFicFare stores the fetched cover on ImageStore; story.cover is often just the href.
     img_store = getattr(story, "img_store", None)

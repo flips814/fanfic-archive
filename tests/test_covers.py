@@ -54,6 +54,64 @@ def test_fff_configuration_pulls_covers_only():
     assert config.get("overrides", "include_images") == "coveronly"
     assert config.get("overrides", "never_make_cover") == "false"
     assert config.get("overrides", "make_firstimage_cover") == "false"
+    assert config.get("overrides", "include_chapter_banner_images") == "false"
+
+
+def test_wattpad_cover_url_upgrades_thumbnail(monkeypatch):
+    class Resp:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"cover": "https://img.wattpad.com/cover/9-256-k.jpg"}
+
+    monkeypatch.setattr(covers.requests, "get", lambda *a, **k: Resp())
+    assert covers.wattpad_cover_url("9") == "https://img.wattpad.com/cover/9-512-k.jpg"
+    assert covers.wattpad_cover_url("") is None
+
+
+def test_fetch_wattpad_cover_skips_when_missing(monkeypatch):
+    class Resp:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"cover": ""}
+
+    monkeypatch.setattr(covers.requests, "get", lambda *a, **k: Resp())
+    assert covers.fetch_wattpad_cover("9") == (None, None, None, None)
+
+
+def test_fetch_wattpad_cover_downloads_when_present(monkeypatch):
+    calls = []
+
+    class ApiResp:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"cover": "https://img.wattpad.com/cover/9-256-k.jpg"}
+
+    class ImgResp:
+        headers = {"Content-Type": "image/jpeg"}
+        content = b"\xff\xd8\xffcover"
+
+        def raise_for_status(self):
+            return None
+
+    def fake_get(url, *a, **k):
+        calls.append(url)
+        if "api/v3/stories" in url:
+            return ApiResp()
+        return ImgResp()
+
+    monkeypatch.setattr(covers.requests, "get", fake_get)
+    url, data, ext, mime = covers.fetch_wattpad_cover("9")
+    assert url == "https://img.wattpad.com/cover/9-512-k.jpg"
+    assert data == b"\xff\xd8\xffcover"
+    assert ext == "jpg"
+    assert mime == "image/jpeg"
+    assert any("api/v3/stories/9" in u for u in calls)
 
 
 def test_persist_meta_cover_and_http(tmp_path, monkeypatch, fake_site, sent):
