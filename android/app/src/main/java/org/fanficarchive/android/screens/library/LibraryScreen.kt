@@ -53,6 +53,7 @@ import org.fanficarchive.android.screens.theme.siteLabel
 fun LibraryScreen(
     repository: ArchiveRepository,
     siteName: String,
+    baseUrl: String = "",
     onOpenWork: (Int) -> Unit,
     onSettings: () -> Unit,
 ) {
@@ -288,6 +289,7 @@ fun LibraryScreen(
                             onClick = { onOpenWork(work.id) },
                             resumeChapter = readingProgress[work.id]?.chapterNumber,
                             downloaded = work.id in downloadedIds || downloadedOnly,
+                            baseUrl = baseUrl,
                         )
                     }
                 }

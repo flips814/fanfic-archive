@@ -7,6 +7,12 @@
 </nav>
 
 <header class="work-hero">
+  {% if has_cover(work.id) %}
+  <div class="work-cover">
+    <img src="{{ cover_url(work.id) }}" alt="Cover for {{ work.title }}" width="180" height="270">
+  </div>
+  {% endif %}
+  <div class="work-hero-main">
   <div class="card-badges">
     {{ site_badge(work.site) }}
     {{ status_pill(work.status) }}
@@ -45,6 +51,7 @@
     {% endif %}
   </div>
   {% if settings.translate_url %}<div class="translate-status" data-translate-status role="status" aria-live="polite" hidden></div>{% endif %}
+  </div>
 </header>
 
 {% if work.last_error %}

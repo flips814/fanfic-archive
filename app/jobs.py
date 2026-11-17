@@ -4,7 +4,7 @@ from datetime import timedelta
 from sqlalchemy import and_, not_, or_, select
 from sqlalchemy.orm import Session
 
-from app import notify
+from app import covers, notify
 from app.access import VISIBILITY_PRIVATE, VISIBILITY_PUBLIC, can_view, normalize_visibility
 from app.config import settings
 from app.db import session_scope
@@ -204,6 +204,12 @@ def run_job(job_id: int) -> None:
             job = db.get(ImportJob, job_id)
             job.work_id, job.work_title = work.id, work.title
             existing = {c.source_key: c.id for c in work.chapters}
+
+        # Persist a site-provided cover when the importer found one (best-effort).
+        try:
+            covers.persist_meta_cover(work_id, meta)
+        except Exception:
+            log.exception("Cover save failed for work %s", work_id)
 
         new_chapters: list[tuple[int, str]] = []
         source_keys = {ref.key for ref in meta.chapters}

@@ -42,8 +42,10 @@ import org.fanficarchive.android.data.VISIBILITY_PRIVATE
 import org.fanficarchive.android.data.VISIBILITY_PUBLIC
 import org.fanficarchive.android.data.WorkDetail
 import org.fanficarchive.android.screens.components.ButtonLabel
+import org.fanficarchive.android.screens.components.CoverImage
 import org.fanficarchive.android.screens.components.DownloadedPill
 import org.fanficarchive.android.screens.components.ErrorText
+import org.fanficarchive.android.screens.components.absoluteMediaUrl
 import org.fanficarchive.android.screens.components.FanficTextField
 import org.fanficarchive.android.screens.components.FollowingPill
 import org.fanficarchive.android.screens.components.HtmlPane
@@ -147,6 +149,16 @@ fun WorkDetailScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    val cover = absoluteMediaUrl(baseUrl, detail.coverUrl)
+                    if (cover != null) {
+                        CoverImage(
+                            url = cover,
+                            contentDescription = "Cover for $displayTitle",
+                            modifier = Modifier
+                                .fillMaxWidth(0.45f)
+                                .padding(bottom = 4.dp),
+                        )
+                    }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         SiteBadge(detail.site)
                         StatusPill(detail.status)

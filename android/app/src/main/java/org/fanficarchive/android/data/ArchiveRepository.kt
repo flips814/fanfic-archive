@@ -305,6 +305,7 @@ class ArchiveRepository(
             warnings = detail.warnings,
             chapterList = detail.chapterList,
             chapters = chapters,
+            coverUrl = detail.coverUrl,
         )
         offline.saveWork(snapshot)
         if (lastError != null && chapters.size < total) {

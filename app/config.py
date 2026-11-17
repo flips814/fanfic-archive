@@ -29,6 +29,7 @@ class Settings:
     secret_key: str = os.getenv("SECRET_KEY", "")
     dev_login: bool = _bool("DEV_LOGIN")
     fanficfare_personal_ini: str = os.getenv("FANFICFARE_PERSONAL_INI", "/config/personal.ini")
+    covers_dir: str = os.getenv("COVERS_DIR", "data/covers")
 
     # general
     site_name: str = os.getenv("SITE_NAME", "Fanfic Archive")

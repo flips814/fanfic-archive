@@ -5,14 +5,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import admin, api, auth, comments, notify, settings_store, translate
+from app import admin, api, auth, comments, covers, notify, settings_store, translate
 from app.access import (
     VISIBILITY_PRIVATE,
     VISIBILITY_PUBLIC,
@@ -155,6 +155,8 @@ templates.env.globals.update(
     settings=settings,
     site_label=site_label,
     is_new_chapter=_is_new_chapter,
+    has_cover=covers.has_cover,
+    cover_url=covers.cover_url_path,
     comment_max_length=comments.MAX_LENGTH,
     static_version=hashlib.sha256(
         b"".join(p.read_bytes() for p in sorted((BASE_DIR / "static").iterdir()))
@@ -406,7 +408,20 @@ def work_delete(request: Request, work_id: int, db: Session = Depends(get_db), u
     flash(request, f"Deleted “{work.title}”.")
     db.delete(work)
     db.commit()
+    covers.delete_cover(work_id)
     return RedirectResponse("/", status_code=303)
+
+
+@app.get("/works/{work_id}/cover")
+def work_cover(work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    import mimetypes
+
+    _get_work(db, work_id, user)
+    path = covers.cover_path(work_id)
+    if path is None:
+        raise HTTPException(404, "No cover")
+    media_type = mimetypes.guess_type(path.name)[0] or "image/jpeg"
+    return FileResponse(path, media_type=media_type)
 
 
 @app.get("/works/{work_id}/epub")

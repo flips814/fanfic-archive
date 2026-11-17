@@ -13,6 +13,7 @@ from fanficfare import exceptions as fff_exceptions
 from fanficfare.configurable import Configuration
 
 from app.config import settings
+from app.covers import extract_cover_from_fff_story
 from app.importers.base import ChapterRef, Importer, ImportError_, WorkMeta, WorkSource
 
 log = logging.getLogger(__name__)
@@ -32,8 +33,10 @@ def _configuration(url: str) -> Configuration:
         config.add_section("overrides")
     except configparser.DuplicateSectionError:
         pass
+    # Skip inline chapter images, but allow a site-provided cover when present.
     config.set("overrides", "include_images", "false")
-    config.set("overrides", "never_make_cover", "true")
+    config.set("overrides", "never_make_cover", "false")
+    config.set("overrides", "make_firstimage_cover", "false")
     if settings.fanficfare_is_adult:
         config.set("overrides", "is_adult", "true")
     if settings.flaresolverr_url and config.site in settings.flaresolverr_sites:
@@ -83,7 +86,7 @@ class FanFicFareSource(WorkSource):
                 config.set("overrides", "username", username)
                 config.set("overrides", "password", password)
                 self.adapter.username, self.adapter.password = username, password
-            story = self.adapter.getStoryMetadataOnly(get_cover=False)
+            story = self.adapter.getStoryMetadataOnly(get_cover=True)
         except fff_exceptions.UnknownSite as e:
             raise ImportError_(f"Unsupported site: {url}") from e
         except fff_exceptions.StoryDoesNotExist as e:
@@ -120,6 +123,7 @@ class FanFicFareSource(WorkSource):
             except Exception:
                 return []
 
+        cover_url, cover_data, cover_ext, cover_mime = extract_cover_from_fff_story(story)
         self.meta = WorkMeta(
             site=self.adapter.getSiteDomain(),
             url=meta("storyUrl") or self.adapter.url,
@@ -143,6 +147,10 @@ class FanFicFareSource(WorkSource):
                 ChapterRef(key=c["url"], title=c.get("title") or f"Chapter {i + 1}", url=c["url"])
                 for i, c in enumerate(self.adapter.get_chapters())
             ],
+            cover_url=cover_url,
+            cover_data=cover_data,
+            cover_ext=cover_ext,
+            cover_mime=cover_mime,
         )
 
     def fetch_chapter(self, index: int, ref: ChapterRef) -> str:

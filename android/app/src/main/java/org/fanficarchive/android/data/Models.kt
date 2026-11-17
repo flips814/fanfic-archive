@@ -69,6 +69,7 @@ data class WorkSummary(
     @SerialName("last_error") val lastError: String? = null,
     @SerialName("is_following") val isFollowing: Boolean = false,
     val visibility: String = VISIBILITY_PUBLIC,
+    @SerialName("cover_url") val coverUrl: String? = null,
 ) {
     val isPrivate: Boolean get() = visibility == VISIBILITY_PRIVATE
 }
@@ -127,6 +128,7 @@ data class WorkDetail(
     val warnings: List<String> = emptyList(),
     @SerialName("summary_html") val summaryHtml: String? = null,
     @SerialName("chapter_list") val chapterList: List<ChapterSummary> = emptyList(),
+    @SerialName("cover_url") val coverUrl: String? = null,
     @Transient val fromOffline: Boolean = false,
 ) {
     val isPrivate: Boolean get() = visibility == VISIBILITY_PRIVATE

@@ -155,6 +155,7 @@ fun FanficNavHost(repository: ArchiveRepository) {
                 LibraryScreen(
                     repository = repository,
                     siteName = current.siteName,
+                    baseUrl = current.baseUrl,
                     onOpenWork = { navController.navigate(Routes.work(it)) },
                     onSettings = { navController.navigate(Routes.SETTINGS) },
                 )

@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -253,6 +255,12 @@ fun FilterTag(
     )
 }
 
+fun absoluteMediaUrl(baseUrl: String, path: String?): String? {
+    if (path.isNullOrBlank()) return null
+    if (path.startsWith("http://") || path.startsWith("https://")) return path
+    return baseUrl.trimEnd('/') + (if (path.startsWith("/")) path else "/$path")
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun WorkCard(
@@ -261,68 +269,84 @@ fun WorkCard(
     modifier: Modifier = Modifier,
     resumeChapter: Int? = null,
     downloaded: Boolean = false,
+    baseUrl: String = "",
 ) {
     FanficCard(modifier = modifier, onClick = onClick) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            SiteBadge(work.site)
-            StatusPill(work.status)
-            if (work.isPrivate) PrivatePill()
-            if (downloaded) DownloadedPill()
-            if (work.isFollowing) FollowingPill()
-            if (resumeChapter != null) {
-                MetaChip(
-                    text = "Continue · Ch $resumeChapter",
-                    foreground = MaterialTheme.colorScheme.primary,
-                    background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    border = MaterialTheme.colorScheme.primary,
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            val cover = absoluteMediaUrl(baseUrl, work.coverUrl)
+            if (cover != null) {
+                CoverImage(
+                    url = cover,
+                    contentDescription = "Cover for ${work.title}",
+                    modifier = Modifier.width(72.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    SiteBadge(work.site)
+                    StatusPill(work.status)
+                    if (work.isPrivate) PrivatePill()
+                    if (downloaded) DownloadedPill()
+                    if (work.isFollowing) FollowingPill()
+                    if (resumeChapter != null) {
+                        MetaChip(
+                            text = "Continue · Ch $resumeChapter",
+                            foreground = MaterialTheme.colorScheme.primary,
+                            background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            border = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                Text(
+                    work.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(top = 10.dp),
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "by ${work.author ?: "unknown author"}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                if (work.fandoms.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier.padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        work.fandoms.take(3).forEach { TagChip(it) }
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    StatCell("Chapters", work.chapters.toString())
+                    StatCell("Words", formatNumber(work.wordCount))
+                    StatCell("Updated", relativeTime(work.lastNewChapterAt ?: work.createdAt))
+                }
+                Text(
+                    buildString {
+                        append("Imported by ${work.addedBy?.name ?: "a removed user"}")
+                        if (!work.lastError.isNullOrBlank()) append(" · Update check failed")
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (work.lastError.isNullOrBlank()) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    modifier = Modifier.padding(top = 10.dp),
                 )
             }
         }
-        Text(
-            work.title,
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(top = 10.dp),
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            "by ${work.author ?: "unknown author"}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        if (work.fandoms.isNotEmpty()) {
-            FlowRow(
-                modifier = Modifier.padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                work.fandoms.take(3).forEach { TagChip(it) }
-            }
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            StatCell("Chapters", work.chapters.toString())
-            StatCell("Words", formatNumber(work.wordCount))
-            StatCell("Updated", relativeTime(work.lastNewChapterAt ?: work.createdAt))
-        }
-        Text(
-            buildString {
-                append("Imported by ${work.addedBy?.name ?: "a removed user"}")
-                if (!work.lastError.isNullOrBlank()) append(" · Update check failed")
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (work.lastError.isNullOrBlank()) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                MaterialTheme.colorScheme.error
-            },
-            modifier = Modifier.padding(top = 10.dp),
-        )
     }
 }
 

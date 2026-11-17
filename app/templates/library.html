@@ -79,6 +79,12 @@
   {% for work, chapter_count in rows %}
   <li>
     <article class="work-card">
+      {% if has_cover(work.id) %}
+      <a class="card-cover" href="/works/{{ work.id }}" tabindex="-1" aria-hidden="true">
+        <img src="{{ cover_url(work.id) }}" alt="" loading="lazy" width="120" height="180">
+      </a>
+      {% endif %}
+      <div class="card-body">
       <div class="card-badges">
         {{ site_badge(work.site) }}
         {{ status_pill(work.status) }}
@@ -97,6 +103,7 @@
         Imported by {{ work.added_by.label if work.added_by else "a removed user" }}
         {% if work.last_error %}<span class="warn">{{ icon("alert") }} Last update check failed</span>{% endif %}
       </p>
+      </div>
     </article>
   </li>
   {% endfor %}

@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
-from app import comments, translate
+from app import comments, covers, translate
 from app.access import (
     VISIBILITY_PRIVATE,
     VISIBILITY_PUBLIC,
@@ -115,6 +115,7 @@ def _work(
         "visibility": w.visibility or VISIBILITY_PUBLIC,
         "last_error": w.last_error,
         "fandoms": w.fandoms or [],
+        "cover_url": covers.cover_url_path(w.id),
     }
     if is_following is not None:
         data["is_following"] = is_following
@@ -377,6 +378,7 @@ def delete_work(work_id: int, db: Session = Depends(get_db), user: User = Depend
     title = work.title
     db.delete(work)
     db.commit()
+    covers.delete_cover(work_id)
     return {"ok": True, "title": title}
 
 

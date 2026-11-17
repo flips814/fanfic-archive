@@ -27,8 +27,10 @@ x-app: &app
     FLARESOLVERR_URL: ${FLARESOLVERR_URL-http://flaresolverr:8191}
     # Set TRANSLATE_URL= (empty) in .env to turn translation off.
     TRANSLATE_URL: ${TRANSLATE_URL-http://libretranslate:5000}
+    COVERS_DIR: /data/covers
   volumes:
     - ./config:/config:ro
+    - ${COVERS_HOST_DIR:-./data/covers}:/data/covers
   depends_on:
     db:
       condition: service_healthy

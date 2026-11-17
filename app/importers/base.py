@@ -35,6 +35,11 @@ class WorkMeta:
     published_at: datetime | None = None
     updated_at: datetime | None = None
     chapters: list[ChapterRef] = field(default_factory=list)
+    # Optional cover from the source site (URL and/or raw image bytes).
+    cover_url: str | None = None
+    cover_data: bytes | None = None
+    cover_ext: str | None = None
+    cover_mime: str | None = None
 
 
 class WorkSource(ABC):

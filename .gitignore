@@ -5,6 +5,7 @@ __pycache__/
 *.db
 .pytest_cache/
 config/personal.ini
+data/covers/
 
 # Android
 android/.gradle/

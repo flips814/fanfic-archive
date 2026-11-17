@@ -41,6 +41,7 @@ data class OfflineWorkSnapshot(
     val warnings: List<String> = emptyList(),
     val chapterList: List<ChapterSummary> = emptyList(),
     val chapters: List<OfflineChapter> = emptyList(),
+    val coverUrl: String? = null,
 ) {
     fun toWorkSummary(): WorkSummary = WorkSummary(
         id = workId,
@@ -54,6 +55,7 @@ data class OfflineWorkSnapshot(
         chapters = chapters.size.coerceAtLeast(chapterList.size),
         fandoms = fandoms,
         visibility = visibility,
+        coverUrl = coverUrl,
     )
 
     fun toWorkDetail(): WorkDetail = WorkDetail(
@@ -78,6 +80,7 @@ data class OfflineWorkSnapshot(
         chapterList = chapterList.ifEmpty {
             chapters.map { ChapterSummary(number = it.number, title = it.title, wordCount = it.wordCount) }
         },
+        coverUrl = coverUrl,
         fromOffline = true,
     )
 
