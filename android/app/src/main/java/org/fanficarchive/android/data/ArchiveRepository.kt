@@ -99,7 +99,9 @@ class ArchiveRepository(
 
     suspend fun login(username: String, password: String): UserMe {
         val user = api().login(LoginRequest(username.trim(), password))
-        prefs.setLoggedIn(true, user.name)
+        prefs.setLoggedIn(true, user.name, user.id)
+        // Pull server bookmarks for this account (OIDC/local) onto the device.
+        runCatching { syncReadingProgress() }
         return user
     }
 
@@ -119,7 +121,8 @@ class ArchiveRepository(
             throw IllegalStateException("Sign-in did not set a session cookie. Try again.")
         }
         val user = api().me()
-        prefs.setLoggedIn(true, user.name)
+        prefs.setLoggedIn(true, user.name, user.id)
+        runCatching { syncReadingProgress() }
         return user
     }
 
@@ -164,7 +167,8 @@ class ArchiveRepository(
         }
         return runCatching {
             val user = api().me()
-            prefs.setLoggedIn(true, user.name)
+            prefs.setLoggedIn(true, user.name, user.id)
+            runCatching { syncReadingProgress() }
             true
         }.getOrElse { err ->
             if (err is HttpException && err.code() == 401) {
@@ -422,22 +426,31 @@ class ArchiveRepository(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun readingProgressForCurrentServer(): Flow<Map<Int, ReadingProgress>> =
-        prefs.profile.map { it.baseUrl }.flatMapLatest { base ->
-            prefs.readingProgressForServer(base)
+        prefs.profile.flatMapLatest { profile ->
+            prefs.readingProgressForUser(profile.baseUrl, profile.userId)
         }
 
     suspend fun getReadingProgress(workId: Int): ReadingProgress? {
-        val base = prefs.profile.first().baseUrl
-        if (base.isBlank()) return null
-        return prefs.getReadingProgress(base, workId)
+        val profile = prefs.profile.first()
+        if (profile.baseUrl.isBlank() || profile.userId <= 0) return null
+        return prefs.getReadingProgress(profile.baseUrl, profile.userId, workId)
     }
 
-    /** Pull server bookmarks and merge with local by newest updatedAt; push newer locals. */
+    /**
+     * Merge server reading progress for the signed-in account (OIDC or local).
+     * Newest updatedAt wins; local DataStore is keyed by user id so SSO accounts stay separate.
+     */
     suspend fun syncReadingProgress() {
-        val base = prefs.profile.first().baseUrl
+        val profile = prefs.profile.first()
+        val base = profile.baseUrl
+        var userId = profile.userId
         if (base.isBlank()) return
+        if (userId <= 0) {
+            userId = runCatching { api().me().id }.getOrElse { return }
+            prefs.setLoggedIn(true, profile.username, userId)
+        }
         val remote = runCatching { api().listReadingProgress().progress }.getOrElse { return }
-        val local = prefs.readingProgressForServer(base).first()
+        val local = prefs.readingProgressForUser(base, userId).first()
         val remoteByWork = remote.associateBy { it.workId }
 
         for (dto in remote) {
@@ -446,6 +459,7 @@ class ArchiveRepository(
             if (existing == null || remoteAt > existing.updatedAt) {
                 prefs.saveReadingProgress(
                     baseUrl = base,
+                    userId = userId,
                     workId = dto.workId,
                     chapterNumber = dto.chapterNumber,
                     scrollOffset = if (existing?.chapterNumber == dto.chapterNumber) existing.scrollOffset else 0,
@@ -478,10 +492,23 @@ class ArchiveRepository(
         scrollOffset: Int,
         scrollFraction: Float = 0f,
     ) {
-        val base = prefs.profile.first().baseUrl
-        if (base.isBlank()) return
+        val profile = prefs.profile.first()
+        if (profile.baseUrl.isBlank()) return
+        var userId = profile.userId
+        if (userId <= 0) {
+            userId = runCatching { api().me().id }.getOrElse { return }
+            prefs.setLoggedIn(true, profile.username, userId)
+        }
         val updatedAt = System.currentTimeMillis()
-        prefs.saveReadingProgress(base, workId, chapterNumber, scrollOffset, scrollFraction, updatedAt)
+        prefs.saveReadingProgress(
+            profile.baseUrl,
+            userId,
+            workId,
+            chapterNumber,
+            scrollOffset,
+            scrollFraction,
+            updatedAt,
+        )
         runCatching {
             api().putReadingProgress(
                 workId,
@@ -494,9 +521,9 @@ class ArchiveRepository(
     }
 
     suspend fun clearReadingProgress(workId: Int) {
-        val base = prefs.profile.first().baseUrl
-        if (base.isBlank()) return
-        prefs.clearReadingProgress(base, workId)
+        val profile = prefs.profile.first()
+        if (profile.baseUrl.isBlank() || profile.userId <= 0) return
+        prefs.clearReadingProgress(profile.baseUrl, profile.userId, workId)
         runCatching { api().deleteReadingProgress(workId) }
     }
 

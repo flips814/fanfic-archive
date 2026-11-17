@@ -232,6 +232,8 @@ def info(db: Session = Depends(get_db)):
             "translation": bool(settings.translate_url),
             "comments": True,
             "epub": True,
+            # Progress is per signed-in archive user (OIDC SSO or local), synced across web/app.
+            "reading_progress": True,
         },
     }
 

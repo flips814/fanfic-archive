@@ -26,6 +26,7 @@ data class FeatureFlags(
     val translation: Boolean = false,
     val comments: Boolean = true,
     val epub: Boolean = true,
+    @SerialName("reading_progress") val readingProgress: Boolean = true,
 )
 
 @Serializable

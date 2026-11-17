@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +24,8 @@ data class ServerProfile(
     val siteName: String = "",
     val loggedIn: Boolean = false,
     val username: String = "",
+    /** Archive user id from /api/me (OIDC or local); scopes reading-progress cache. */
+    val userId: Int = 0,
 )
 
 data class ReaderPrefs(
@@ -49,6 +52,7 @@ class ServerPreferences(private val context: Context) {
     private val siteNameKey = stringPreferencesKey("site_name")
     private val loggedInKey = booleanPreferencesKey("logged_in")
     private val usernameKey = stringPreferencesKey("username")
+    private val userIdKey = intPreferencesKey("user_id")
     private val fontScaleKey = floatPreferencesKey("font_scale")
     private val readerThemeKey = stringPreferencesKey("reader_theme")
     private val translateToKey = stringPreferencesKey("translate_to")
@@ -61,6 +65,7 @@ class ServerPreferences(private val context: Context) {
             siteName = prefs[siteNameKey].orEmpty(),
             loggedIn = prefs[loggedInKey] ?: false,
             username = prefs[usernameKey].orEmpty(),
+            userId = prefs[userIdKey] ?: 0,
         )
     }
 
@@ -85,10 +90,12 @@ class ServerPreferences(private val context: Context) {
         }
     }
 
-    suspend fun setLoggedIn(loggedIn: Boolean, username: String = "") {
+    suspend fun setLoggedIn(loggedIn: Boolean, username: String = "", userId: Int = 0) {
         context.dataStore.edit { prefs ->
             prefs[loggedInKey] = loggedIn
             prefs[usernameKey] = username
+            if (loggedIn && userId > 0) prefs[userIdKey] = userId
+            else prefs.remove(userIdKey)
         }
     }
 
@@ -99,6 +106,7 @@ class ServerPreferences(private val context: Context) {
             prefs.remove(siteNameKey)
             prefs.remove(loggedInKey)
             prefs.remove(usernameKey)
+            prefs.remove(userIdKey)
         }
     }
 
@@ -116,12 +124,14 @@ class ServerPreferences(private val context: Context) {
         }
     }
 
-    fun progressKey(baseUrl: String, workId: Int): String =
-        "${baseUrl.trimEnd('/')}|$workId"
+    /** Local cache key scoped to archive account (OIDC/local user id). */
+    fun progressKey(baseUrl: String, userId: Int, workId: Int): String =
+        "${baseUrl.trimEnd('/')}|u$userId|$workId"
 
-    fun readingProgressForServer(baseUrl: String): Flow<Map<Int, ReadingProgress>> =
+    fun readingProgressForUser(baseUrl: String, userId: Int): Flow<Map<Int, ReadingProgress>> =
         readingProgressAll.map { all ->
-            val prefix = "${baseUrl.trimEnd('/')}|"
+            if (userId <= 0) return@map emptyMap()
+            val prefix = "${baseUrl.trimEnd('/')}|u$userId|"
             all.mapNotNull { (key, value) ->
                 if (!key.startsWith(prefix)) return@mapNotNull null
                 val id = key.removePrefix(prefix).toIntOrNull() ?: return@mapNotNull null
@@ -129,20 +139,23 @@ class ServerPreferences(private val context: Context) {
             }.toMap()
         }
 
-    suspend fun getReadingProgress(baseUrl: String, workId: Int): ReadingProgress? {
+    suspend fun getReadingProgress(baseUrl: String, userId: Int, workId: Int): ReadingProgress? {
+        if (userId <= 0) return null
         val all = readingProgressAll.first()
-        return all[progressKey(baseUrl, workId)]
+        return all[progressKey(baseUrl, userId, workId)]
     }
 
     suspend fun saveReadingProgress(
         baseUrl: String,
+        userId: Int,
         workId: Int,
         chapterNumber: Int,
         scrollOffset: Int,
         scrollFraction: Float = 0f,
         updatedAt: Long = System.currentTimeMillis(),
     ) {
-        val key = progressKey(baseUrl, workId)
+        if (userId <= 0) return
+        val key = progressKey(baseUrl, userId, workId)
         context.dataStore.edit { prefs ->
             val map = decodeProgressMap(prefs[readingProgressKey]).toMutableMap()
             map[key] = ReadingProgress(
@@ -155,8 +168,9 @@ class ServerPreferences(private val context: Context) {
         }
     }
 
-    suspend fun clearReadingProgress(baseUrl: String, workId: Int) {
-        val key = progressKey(baseUrl, workId)
+    suspend fun clearReadingProgress(baseUrl: String, userId: Int, workId: Int) {
+        if (userId <= 0) return
+        val key = progressKey(baseUrl, userId, workId)
         context.dataStore.edit { prefs ->
             val map = decodeProgressMap(prefs[readingProgressKey]).toMutableMap()
             if (map.remove(key) != null) {

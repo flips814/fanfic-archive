@@ -147,7 +147,7 @@ fun SettingsScreen(
                         Text("Signed in as ${profile.username}", style = MaterialTheme.typography.bodyMedium)
                     }
                     Text(
-                        "Reading settings live on each chapter. Channel destinations (email / Discord) stay on the website.",
+                        "Continue reading follows this signed-in account across the website and app (including SSO). Channel destinations (email / Discord) stay on the website.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

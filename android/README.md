@@ -47,7 +47,7 @@ UI mirrors the website (Pico Violet): bottom nav for **Library**, **Add works**,
 - Work detail: follow, update check, Make private / Make public, auto-update, **Download for offline**, EPUB share, comments, delete, title/summary translation
 - Offline reading: chapters saved on-device; library **Downloaded** filter; reader falls back when the server is unreachable
 - Chapter reader: full-page scroll, collapsible Translate + Reading settings, LibreTranslate
-- Local reading bookmarks (last chapter + scroll position) with Continue on work/library cards
+- Reading progress synced to your archive account (OIDC SSO or local): Continue on web and app
 - Settings notifications feed (new stories, updates, comments, follows, import/update progress)
 
 Not yet: site-login credentials, admin.
