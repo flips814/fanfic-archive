@@ -180,10 +180,6 @@ img, video, svg, canvas, iframe { max-width: 100%; height: auto; }
 }
 .continue-recent a:hover { color: var(--pico-primary); }
 
-.finished-reading { margin: 0 0 1.25rem; }
-.finished-card { border-color: color-mix(in srgb, var(--pico-ins-color, #2e7d32) 35%, var(--pico-muted-border-color)); }
-.finished-kicker { color: var(--pico-ins-color, #2e7d32) !important; }
-.finished-note { margin: 0; color: var(--pico-muted-color); }
 .pill-finished {
   color: var(--pico-ins-color, #2e7d32);
   border-color: color-mix(in srgb, var(--pico-ins-color, #2e7d32) 55%, transparent);

@@ -236,7 +236,6 @@ def library(
     visibility: str = "",
     mine: str = "",
     continue_reading: str = "",
-    finished: str = "",
     page: int = 1,
     db: Session = Depends(get_db),
     user: User | None = Depends(current_user_optional),
@@ -251,9 +250,6 @@ def library(
     if visibility not in (VISIBILITY_PUBLIC, VISIBILITY_PRIVATE):
         visibility = ""
     only_continue = continue_reading in ("1", "true", "yes", "on")
-    only_finished = finished in ("1", "true", "yes", "on")
-    if only_continue and only_finished:
-        only_finished = False
     chapter_count = (
         select(func.count(Chapter.id)).where(Chapter.work_id == Work.id).correlate(Work).scalar_subquery()
     )
@@ -287,20 +283,16 @@ def library(
         .correlate(Work)
         .scalar_subquery()
     )
-    if only_continue or only_finished:
+    if only_continue:
         query = query.join(
             ReadingProgress,
             (ReadingProgress.work_id == Work.id) & (ReadingProgress.user_id == user.id),
-        )
-        if only_continue:
-            query = query.where(ReadingProgress.chapter_number < last_ch)
-        else:
-            query = query.where(ReadingProgress.chapter_number >= last_ch)
+        ).where(ReadingProgress.chapter_number < last_ch)
 
     total = db.scalar(select(func.count()).select_from(query.subquery()))
     order = (
         ReadingProgress.updated_at.desc()
-        if only_continue or only_finished
+        if only_continue
         else func.coalesce(Work.last_new_chapter_at, Work.created_at).desc()
     )
     rows = db.execute(
@@ -324,9 +316,9 @@ def library(
             for p in progress_rows
             if is_caught_up(p.chapter_number, last_by_work.get(p.work_id))
         }
-    # Featured strips — independent of filters.
-    continue_rows = []
-    finished_rows = []
+    # Single most-recent in-progress bookmark for the Continue reading card.
+    continue_work = None
+    continue_chapter = None
     recent_progress = db.scalars(
         select(ReadingProgress)
         .where(ReadingProgress.user_id == user.id)
@@ -338,13 +330,11 @@ def library(
         work = db.get(Work, progress.work_id)
         if not work or not can_view(user, work):
             continue
-        last = recent_last.get(work.id)
-        entry = (work, progress.chapter_number, progress.updated_at, catch_up_label(work))
-        if is_caught_up(progress.chapter_number, last):
-            if len(finished_rows) < 5:
-                finished_rows.append(entry)
-        elif len(continue_rows) < 5:
-            continue_rows.append(entry)
+        if is_caught_up(progress.chapter_number, recent_last.get(work.id)):
+            continue
+        continue_work = work
+        continue_chapter = progress.chapter_number
+        break
     sites = db.scalars(
         select(Work.site).where(visible_works_clause(user)).distinct().order_by(Work.site)
     ).all()
@@ -363,8 +353,8 @@ def library(
         followed=followed,
         reading_progress=reading_progress,
         caught_up_ids=caught_up_ids,
-        continue_rows=continue_rows,
-        finished_rows=finished_rows,
+        continue_work=continue_work,
+        continue_chapter=continue_chapter,
         sites=sites,
         categories=categories,
         tags=tags,
@@ -381,7 +371,6 @@ def library(
             "visibility": visibility,
             "mine": bool(mine),
             "continue_reading": only_continue,
-            "finished": only_finished,
         },
     )
 

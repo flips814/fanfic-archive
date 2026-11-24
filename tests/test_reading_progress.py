@@ -62,7 +62,9 @@ def test_reading_progress_save_get_clear(fake_site, sent):
     assert alice.get("/api/works", params={"continue_reading": "1"}).json()["total"] == 0
 
     finished_page = alice.get("/")
-    assert "Finished" in finished_page.text or "caught up" in finished_page.text.lower()
+    assert "Finished &amp; caught up" not in finished_page.text
+    assert "Finished & caught up" not in finished_page.text
+    assert 'pill-finished">Finished' in finished_page.text or "Finished" in finished_page.text
 
     assert alice.delete(f"/api/works/{work_id}/reading-progress").json()["ok"] is True
     assert alice.get(f"/api/works/{work_id}/reading-progress").json()["progress"] is None

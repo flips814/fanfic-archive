@@ -292,6 +292,7 @@ fun WorkCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     resumeChapter: Int? = null,
+    finished: Boolean = false,
     downloaded: Boolean = false,
     baseUrl: String = "",
 ) {
@@ -327,7 +328,7 @@ fun WorkCard(
                     buildString {
                         append("${work.chapters} ch · ${formatNumber(work.wordCount)} words")
                         append(" · ${relativeTime(work.lastNewChapterAt ?: work.createdAt)}")
-                        if (resumeChapter != null) append(" · Continue Ch $resumeChapter")
+                        if (!finished && resumeChapter != null) append(" · Continue Ch $resumeChapter")
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -341,6 +342,14 @@ fun WorkCard(
                 ) {
                     SiteBadge(work.site)
                     StatusPill(work.status)
+                    if (finished) {
+                        MetaChip(
+                            text = "Finished",
+                            foreground = MaterialTheme.colorScheme.tertiary,
+                            background = MaterialTheme.colorScheme.tertiaryContainer,
+                            border = null,
+                        )
+                    }
                     if (!layout.isCompact) {
                         if (work.isPrivate) PrivatePill()
                         if (downloaded) DownloadedPill()
