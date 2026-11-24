@@ -50,15 +50,21 @@ def test_library_category_tag_and_relationship_filters(fake_site, sent):
         data={"urls": "\n".join([
             fake_site.add_work("1", "Potter Fic", chapters=1),
             fake_site.add_work("2", "Original Fic", chapters=1),
+            fake_site.add_work("3", "Wattpad Potter", chapters=1),
         ])},
     )
-    assert drain() == 2
+    assert drain() == 3
     with SessionLocal() as db:
         for work in db.scalars(select(Work)).all():
-            if "Potter" in work.title:
+            if work.title == "Potter Fic":
                 work.fandoms = ["Harry Potter"]
-                work.tags = ["angst", "slow burn"]
+                work.tags = ["FanFiction", "angst"]
                 work.relationships = ["Harry Potter/Hermione Granger"]
+            elif work.title == "Wattpad Potter":
+                # Same fandom/tag/ship, different site spelling / spacing.
+                work.fandoms = ["harry potter"]
+                work.tags = ["fanfiction"]
+                work.relationships = ["Harry Potter / Hermione Granger"]
             else:
                 work.fandoms = ["Original Work"]
                 work.tags = ["fluff"]
@@ -70,37 +76,37 @@ def test_library_category_tag_and_relationship_filters(fake_site, sent):
     assert "Harry Potter" in page and "Original Work" in page
     assert "angst" in page and "fluff" in page
     assert "Harry Potter/Hermione Granger" in page
+    api_labels = alice.get("/api/works").json()
+    # Cross-site duplicates collapse to one option each.
+    assert len([c for c in api_labels["categories"] if c.casefold() == "harry potter"]) == 1
+    assert len([t for t in api_labels["tags"] if t.casefold() == "fanfiction"]) == 1
+    assert len([r for r in api_labels["relationships"] if "hermione granger" in r.casefold()]) == 1
 
     by_category = alice.get("/", params={"category": "Harry Potter"}).text
-    assert "Potter Fic" in by_category
+    assert "Potter Fic" in by_category and "Wattpad Potter" in by_category
     assert "Original Fic" not in by_category
 
-    by_tag = alice.get("/", params={"tag": "fluff"}).text
-    assert "Original Fic" in by_tag
-    assert "Potter Fic" not in by_tag
+    by_tag = alice.get("/", params={"tag": "FanFiction"}).text
+    assert "Potter Fic" in by_tag and "Wattpad Potter" in by_tag
+    assert "Original Fic" not in by_tag
 
     by_rel = alice.get("/", params={"relationship": "Harry Potter/Hermione Granger"}).text
-    assert "Potter Fic" in by_rel
+    assert "Potter Fic" in by_rel and "Wattpad Potter" in by_rel
     assert "Original Fic" not in by_rel
 
     both = alice.get("/", params={"category": "Harry Potter", "tag": "angst"}).text
     assert "Potter Fic" in both
     assert "Original Fic" not in both
 
-    api = alice.get("/api/works", params={"category": "Harry Potter"}).json()
-    assert api["total"] == 1
-    assert api["works"][0]["title"] == "Potter Fic"
-    assert "angst" in api["works"][0]["tags"]
-    assert "Harry Potter/Hermione Granger" in api["works"][0]["relationships"]
-    assert "Harry Potter" in api["categories"] and "Original Work" in api["categories"]
-    assert "fluff" in api["tags"] and "angst" in api["tags"]
-    assert "Harry Potter/Hermione Granger" in api["relationships"]
+    api = alice.get("/api/works", params={"category": "harry potter"}).json()
+    assert api["total"] == 2
+    assert {w["title"] for w in api["works"]} == {"Potter Fic", "Wattpad Potter"}
 
-    api_tag = alice.get("/api/works", params={"tag": "slow burn"}).json()
-    assert api_tag["total"] == 1 and api_tag["works"][0]["title"] == "Potter Fic"
+    api_tag = alice.get("/api/works", params={"tag": "fanfiction"}).json()
+    assert api_tag["total"] == 2
 
-    api_rel = alice.get("/api/works", params={"relationship": "Original Character/Original Character"}).json()
-    assert api_rel["total"] == 1 and api_rel["works"][0]["title"] == "Original Fic"
+    api_rel = alice.get("/api/works", params={"relationship": "Harry Potter / Hermione Granger"}).json()
+    assert api_rel["total"] == 2
 
     miss = alice.get("/api/works", params={"category": "Missing Fandom"}).json()
     assert miss["total"] == 0 and miss["works"] == []

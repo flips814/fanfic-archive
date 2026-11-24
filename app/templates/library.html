@@ -12,74 +12,76 @@
 
 {% set active_filters = [filters.site, filters.category, filters.tag, filters.relationship, filters.added_by, filters.status, filters.visibility, filters.mine]|select|list|length %}
 <search aria-label="Search and filter the library">
-<form method="get" class="filters">
-  <div class="field grow">
-    <label for="f-q">Search</label>
-    <input id="f-q" type="search" name="q" value="{{ filters.q }}" placeholder="Title or author" enterkeyhint="search">
+<form method="get" class="filters filters-library">
+  <div class="filters-bar">
+    <div class="field grow">
+      <label for="f-q">Search</label>
+      <input id="f-q" type="search" name="q" value="{{ filters.q }}" placeholder="Title or author" enterkeyhint="search">
+    </div>
+    <div class="field buttons">
+      <button type="submit">Apply</button>
+      {% if filters.q or filters.site or filters.category or filters.tag or filters.relationship or filters.added_by or filters.status or filters.visibility or filters.mine %}<a href="/" role="button" class="secondary outline">Clear</a>{% endif %}
+    </div>
   </div>
   <details class="more-filters" open data-collapse-on-mobile="{{ 'false' if active_filters else 'true' }}">
-  <summary>Filters{% if active_filters %} <span class="pill pill-small">{{ active_filters }} on</span>{% endif %}</summary>
-  <div class="filter-fields">
-  <div class="field">
-    <label for="f-site">Site</label>
-    <select id="f-site" name="site">
-      <option value="">All sites</option>
-      {% for s in sites %}<option value="{{ s }}" {% if s == filters.site %}selected{% endif %}>{{ site_label(s) }}</option>{% endfor %}
-    </select>
-  </div>
-  <div class="field">
-    <label for="f-category">Category</label>
-    <select id="f-category" name="category">
-      <option value="">All categories</option>
-      {% for c in categories %}<option value="{{ c }}" {% if c == filters.category %}selected{% endif %}>{{ c }}</option>{% endfor %}
-    </select>
-  </div>
-  <div class="field">
-    <label for="f-tag">Tag</label>
-    <select id="f-tag" name="tag">
-      <option value="">All tags</option>
-      {% for t in tags %}<option value="{{ t }}" {% if t == filters.tag %}selected{% endif %}>{{ t }}</option>{% endfor %}
-    </select>
-  </div>
-  <div class="field">
-    <label for="f-relationship">Relationship</label>
-    <select id="f-relationship" name="relationship">
-      <option value="">All relationships</option>
-      {% for r in relationships %}<option value="{{ r }}" {% if r == filters.relationship %}selected{% endif %}>{{ r }}</option>{% endfor %}
-    </select>
-  </div>
-  <div class="field">
-    <label for="f-added">Imported by</label>
-    <select id="f-added" name="added_by">
-      <option value="">Anyone</option>
-      {% for u in users %}<option value="{{ u.id }}" {% if u.id == filters.added_by %}selected{% endif %}>{{ u.label }}</option>{% endfor %}
-    </select>
-  </div>
-  <div class="field">
-    <label for="f-status">Status</label>
-    <select id="f-status" name="status">
-      <option value="">Any</option>
-      <option value="ongoing" {% if filters.status == "ongoing" %}selected{% endif %}>In progress</option>
-      <option value="complete" {% if filters.status == "complete" %}selected{% endif %}>Complete</option>
-    </select>
-  </div>
-  <div class="field">
-    <label for="f-visibility">Visibility</label>
-    <select id="f-visibility" name="visibility">
-      <option value="">All</option>
-      <option value="public" {% if filters.visibility == "public" %}selected{% endif %}>Public</option>
-      <option value="private" {% if filters.visibility == "private" %}selected{% endif %}>Private (only mine)</option>
-    </select>
-  </div>
-  <div class="field check">
-    <label><input type="checkbox" name="mine" value="1" {% if filters.mine %}checked{% endif %}> Only works I follow</label>
-  </div>
-  </div>
+    <summary>Filters{% if active_filters %} <span class="pill pill-small">{{ active_filters }} on</span>{% endif %}</summary>
+    <div class="filter-fields">
+      <div class="field">
+        <label for="f-site">Site</label>
+        <select id="f-site" name="site">
+          <option value="">All sites</option>
+          {% for s in sites %}<option value="{{ s }}" {% if s == filters.site %}selected{% endif %}>{{ site_label(s) }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-category">Category</label>
+        <select id="f-category" name="category">
+          <option value="">All categories</option>
+          {% for c in categories %}<option value="{{ c }}" {% if c == filters.category %}selected{% endif %}>{{ c }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-tag">Tag</label>
+        <select id="f-tag" name="tag">
+          <option value="">All tags</option>
+          {% for t in tags %}<option value="{{ t }}" {% if t == filters.tag %}selected{% endif %}>{{ t }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field wide">
+        <label for="f-relationship">Relationship</label>
+        <select id="f-relationship" name="relationship">
+          <option value="">All relationships</option>
+          {% for r in relationships %}<option value="{{ r }}" {% if r == filters.relationship %}selected{% endif %}>{{ r }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-added">Imported by</label>
+        <select id="f-added" name="added_by">
+          <option value="">Anyone</option>
+          {% for u in users %}<option value="{{ u.id }}" {% if u.id == filters.added_by %}selected{% endif %}>{{ u.label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-status">Status</label>
+        <select id="f-status" name="status">
+          <option value="">Any</option>
+          <option value="ongoing" {% if filters.status == "ongoing" %}selected{% endif %}>In progress</option>
+          <option value="complete" {% if filters.status == "complete" %}selected{% endif %}>Complete</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-visibility">Visibility</label>
+        <select id="f-visibility" name="visibility">
+          <option value="">All</option>
+          <option value="public" {% if filters.visibility == "public" %}selected{% endif %}>Public</option>
+          <option value="private" {% if filters.visibility == "private" %}selected{% endif %}>Private (only mine)</option>
+        </select>
+      </div>
+      <div class="field check">
+        <label><input type="checkbox" name="mine" value="1" {% if filters.mine %}checked{% endif %}> Only works I follow</label>
+      </div>
+    </div>
   </details>
-  <div class="field buttons">
-    <button type="submit">Apply</button>
-    {% if filters.q or filters.site or filters.category or filters.tag or filters.relationship or filters.added_by or filters.status or filters.visibility or filters.mine %}<a href="/" role="button" class="secondary outline">Clear</a>{% endif %}
-  </div>
 </form>
 </search>
 

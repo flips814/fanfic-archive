@@ -1,6 +1,8 @@
 package org.fanficarchive.android.screens
 
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -10,6 +12,8 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,7 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavGraph.Companion.findStartDestination
-import org.fanficarchive.android.FanficApp
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -31,6 +35,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.flow.first
+import org.fanficarchive.android.FanficApp
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.ServerInfo
 import org.fanficarchive.android.data.ServerProfile
@@ -41,6 +46,7 @@ import org.fanficarchive.android.screens.login.LoginScreen
 import org.fanficarchive.android.screens.reader.ReaderScreen
 import org.fanficarchive.android.screens.settings.SettingsScreen
 import org.fanficarchive.android.screens.setup.SetupScreen
+import org.fanficarchive.android.screens.theme.rememberContentLayout
 import org.fanficarchive.android.screens.users.UsersScreen
 import org.fanficarchive.android.screens.work.WorkDetailScreen
 
@@ -109,40 +115,48 @@ fun FanficNavHost(
     }
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
-    val showBottomBar = current.loggedIn && currentRoute in mainTabs.map { it.route }
+    val showMainNav = current.loggedIn && currentRoute in mainTabs.map { it.route }
+    val layout = rememberContentLayout()
+    val useRail = showMainNav && layout.useNavRail
 
     // Child screens own status-bar / TopAppBar insets. Only consume the bottom nav here
     // so we don't leave a blank strip under the system status bar.
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            if (showBottomBar) {
-                NavigationBar {
-                    mainTabs.forEach { tab ->
-                        NavigationBarItem(
-                            selected = currentRoute == tab.route,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
-                            label = { Text(tab.label) },
-                        )
-                    }
+    Row(modifier = Modifier.fillMaxSize()) {
+        if (useRail) {
+            NavigationRail {
+                mainTabs.forEach { tab ->
+                    NavigationRailItem(
+                        selected = currentRoute == tab.route,
+                        onClick = { navController.navigateMainTab(tab.route) },
+                        icon = { Icon(tab.icon, contentDescription = tab.label) },
+                        label = { Text(tab.label) },
+                    )
                 }
             }
-        },
-    ) { padding ->
-        NavHost(
-            navController = navController,
-            startDestination = startDestination,
-            modifier = Modifier.padding(padding),
-        ) {
+        }
+        Scaffold(
+            modifier = Modifier.weight(1f),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = {
+                if (showMainNav && !useRail) {
+                    NavigationBar {
+                        mainTabs.forEach { tab ->
+                            NavigationBarItem(
+                                selected = currentRoute == tab.route,
+                                onClick = { navController.navigateMainTab(tab.route) },
+                                icon = { Icon(tab.icon, contentDescription = tab.label) },
+                                label = { Text(tab.label) },
+                            )
+                        }
+                    }
+                }
+            },
+        ) { padding ->
+            NavHost(
+                navController = navController,
+                startDestination = startDestination,
+                modifier = Modifier.padding(padding),
+            ) {
             composable(Routes.SETUP) {
                 SetupScreen(
                     repository = repository,
@@ -178,6 +192,7 @@ fun FanficNavHost(
                     baseUrl = current.baseUrl,
                     onOpenWork = { navController.navigate(Routes.work(it)) },
                     onSettings = { navController.navigate(Routes.SETTINGS) },
+                    onAddWorks = { navController.navigateMainTab(Routes.IMPORT) },
                 )
             }
             composable(Routes.IMPORT) {
@@ -254,5 +269,16 @@ fun FanficNavHost(
                 )
             }
         }
+        }
+    }
+}
+
+private fun NavHostController.navigateMainTab(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) {
+            saveState = true
+        }
+        launchSingleTop = true
+        restoreState = true
     }
 }

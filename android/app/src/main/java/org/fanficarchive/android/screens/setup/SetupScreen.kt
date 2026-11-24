@@ -26,6 +26,8 @@ import org.fanficarchive.android.data.ServerInfo
 import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.FanficTextField
 import org.fanficarchive.android.screens.components.PrimaryButton
+import org.fanficarchive.android.screens.theme.ResponsivePane
+import org.fanficarchive.android.screens.theme.rememberContentLayout
 
 @Composable
 fun SetupScreen(
@@ -39,17 +41,18 @@ fun SetupScreen(
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val layout = rememberContentLayout()
 
     Scaffold { padding ->
+        ResponsivePane(layout = layout, modifier = Modifier.padding(padding)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp)
+                .padding(layout.contentPadding.coerceAtLeast(24.dp))
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Fanfic Archive", style = MaterialTheme.typography.displaySmall)
+            Text("Fanfic Archive", style = MaterialTheme.typography.headlineMedium)
             Text(
                 "Connect to your self-hosted archive. Enter the same public URL you use in a browser.",
                 style = MaterialTheme.typography.bodyLarge,
@@ -85,6 +88,7 @@ fun SetupScreen(
             ) {
                 ButtonLabel(if (loading) "Connecting…" else "Connect")
             }
+        }
         }
     }
 }

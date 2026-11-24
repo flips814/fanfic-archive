@@ -13,8 +13,8 @@ android {
         applicationId = "org.fanficarchive.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.1.5"
+        versionCode = 11
+        versionName = "1.1.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

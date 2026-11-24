@@ -54,8 +54,8 @@
     });
   });
 
-  // ---- small screens: fold the library filters unless one is in use -----------
-  var narrow = window.matchMedia("(max-width: 640px)");
+  // ---- compact screens: fold the library filters unless one is in use ---------
+  var narrow = window.matchMedia("(max-width: 820px)");
   document.querySelectorAll("details[data-collapse-on-mobile]").forEach(function (d) {
     var sync = function () {
       if (!narrow.matches) d.open = true;

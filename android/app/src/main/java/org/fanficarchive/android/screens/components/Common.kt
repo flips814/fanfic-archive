@@ -4,26 +4,28 @@ import android.annotation.SuppressLint
 import android.view.MotionEvent
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,7 +36,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,6 +49,7 @@ import org.fanficarchive.android.screens.theme.JobRunning
 import org.fanficarchive.android.screens.theme.PillComplete
 import org.fanficarchive.android.screens.theme.PillOngoing
 import org.fanficarchive.android.screens.theme.isCompleteStatus
+import org.fanficarchive.android.screens.theme.rememberContentLayout
 import org.fanficarchive.android.screens.theme.siteBadgeColor
 import org.fanficarchive.android.screens.theme.siteLabel
 import java.time.Instant
@@ -81,7 +83,7 @@ fun EmptyState(title: String, body: String, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(title, style = MaterialTheme.typography.headlineSmall)
+        Text(title, style = MaterialTheme.typography.titleLarge)
         Text(
             body,
             style = MaterialTheme.typography.bodyMedium,
@@ -96,51 +98,73 @@ fun FanficCard(
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        shadowElevation = 2.dp,
-    ) {
+    val body: @Composable () -> Unit = {
         Column(modifier = Modifier.padding(16.dp)) {
             content()
         }
     }
+    if (onClick != null) {
+        ElevatedCard(
+            onClick = onClick,
+            modifier = modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
+            content = { body() },
+        )
+    } else {
+        Card(
+            modifier = modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
+            content = { body() },
+        )
+    }
 }
-
-private val MetaShape = RoundedCornerShape(999.dp)
 
 @Composable
 fun MetaChip(
     text: String,
     modifier: Modifier = Modifier,
-    foreground: Color = MaterialTheme.colorScheme.onSurface,
-    background: Color = Color.Transparent,
-    border: Color? = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+    foreground: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    background: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    border: Color? = null,
 ) {
-    Text(
-        text = text,
-        color = foreground,
-        style = MaterialTheme.typography.labelMedium,
-        modifier = modifier
-            .clip(MetaShape)
-            .background(background)
-            .then(if (border != null) Modifier.border(1.dp, border, MetaShape) else Modifier)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+    SuggestionChip(
+        onClick = {},
+        enabled = false,
+        label = { Text(text, style = MaterialTheme.typography.labelLarge) },
+        modifier = modifier.heightIn(min = 32.dp),
+        colors = SuggestionChipDefaults.suggestionChipColors(
+            disabledContainerColor = background,
+            disabledLabelColor = foreground,
+        ),
+        border = if (border != null) {
+            SuggestionChipDefaults.suggestionChipBorder(
+                enabled = false,
+                disabledBorderColor = border,
+            )
+        } else {
+            SuggestionChipDefaults.suggestionChipBorder(enabled = false, borderColor = Color.Transparent)
+        },
     )
 }
 
 @Composable
 fun SiteBadge(site: String?, modifier: Modifier = Modifier) {
-    MetaChip(
-        text = siteLabel(site),
+    AssistChip(
+        onClick = {},
+        enabled = false,
+        label = { Text(siteLabel(site), style = MaterialTheme.typography.labelLarge) },
         modifier = modifier,
-        foreground = Color.White,
-        background = siteBadgeColor(site),
-        border = null,
+        colors = AssistChipDefaults.assistChipColors(
+            disabledContainerColor = siteBadgeColor(site),
+            disabledLabelColor = Color.White,
+        ),
+        border = AssistChipDefaults.assistChipBorder(enabled = false, borderColor = Color.Transparent),
     )
 }
 
@@ -153,30 +177,30 @@ fun StatusPill(status: String?, modifier: Modifier = Modifier) {
         text = if (complete) "Complete" else "In progress",
         modifier = modifier,
         foreground = color,
+        background = color.copy(alpha = 0.12f),
         border = color,
     )
 }
 
 @Composable
 fun FollowingPill(modifier: Modifier = Modifier) {
-    val color = MaterialTheme.colorScheme.primary
     MetaChip(
         text = "Following",
         modifier = modifier,
-        foreground = color,
-        background = color.copy(alpha = 0.1f),
-        border = color,
+        foreground = MaterialTheme.colorScheme.onPrimaryContainer,
+        background = MaterialTheme.colorScheme.primaryContainer,
+        border = null,
     )
 }
 
 @Composable
 fun PrivatePill(modifier: Modifier = Modifier) {
-    val color = Color(0xFF6A1B9A)
     MetaChip(
         text = "Private",
         modifier = modifier,
-        foreground = color,
-        border = color,
+        foreground = MaterialTheme.colorScheme.onSecondaryContainer,
+        background = MaterialTheme.colorScheme.secondaryContainer,
+        border = null,
     )
 }
 
@@ -186,19 +210,19 @@ fun PublicPill(modifier: Modifier = Modifier) {
         text = "Public",
         modifier = modifier,
         foreground = MaterialTheme.colorScheme.onSurfaceVariant,
-        border = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+        background = MaterialTheme.colorScheme.surfaceContainerHighest,
+        border = MaterialTheme.colorScheme.outlineVariant,
     )
 }
 
 @Composable
 fun DownloadedPill(modifier: Modifier = Modifier) {
-    val color = MaterialTheme.colorScheme.tertiary
     MetaChip(
         text = "Downloaded",
         modifier = modifier,
-        foreground = color,
-        background = color.copy(alpha = 0.12f),
-        border = color,
+        foreground = MaterialTheme.colorScheme.onTertiaryContainer,
+        background = MaterialTheme.colorScheme.tertiaryContainer,
+        border = null,
     )
 }
 
@@ -208,7 +232,7 @@ fun JobStatusPill(status: String, modifier: Modifier = Modifier) {
         "done" -> JobDone to Color.White
         "failed" -> JobFailed to Color.White
         "running" -> JobRunning to Color(0xFF1A1A1A)
-        else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurfaceVariant
     }
     MetaChip(
         text = status.replaceFirstChar { it.uppercase() },
@@ -219,19 +243,21 @@ fun JobStatusPill(status: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Soft violet tag chip matching the website `.tags .tag`. */
 @Composable
 fun TagChip(text: String, modifier: Modifier = Modifier) {
-    MetaChip(
-        text = text,
+    SuggestionChip(
+        onClick = {},
+        enabled = false,
+        label = { Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         modifier = modifier,
-        foreground = MaterialTheme.colorScheme.onSurface,
-        background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-        border = null,
+        colors = SuggestionChipDefaults.suggestionChipColors(
+            disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            disabledLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
+        border = SuggestionChipDefaults.suggestionChipBorder(enabled = false, borderColor = Color.Transparent),
     )
 }
 
-/** Selectable filter / choice chip used in Library and Activity. */
 @Composable
 fun FilterTag(
     label: String,
@@ -239,19 +265,11 @@ fun FilterTag(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-    val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
-    val border = if (selected) null else MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
-    Text(
-        text = label,
-        color = fg,
-        style = MaterialTheme.typography.labelLarge,
-        modifier = modifier
-            .clip(MetaShape)
-            .background(bg)
-            .then(if (border != null) Modifier.border(1.5.dp, border, MetaShape) else Modifier)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
+        modifier = modifier.heightIn(min = 48.dp),
     )
 }
 
@@ -277,90 +295,71 @@ fun WorkCard(
     downloaded: Boolean = false,
     baseUrl: String = "",
 ) {
+    val layout = rememberContentLayout()
     FanficCard(modifier = modifier, onClick = onClick) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             val cover = absoluteMediaUrl(baseUrl, work.coverUrl)
             if (cover != null) {
                 CoverImage(
                     url = cover,
                     contentDescription = "Cover for ${work.title}",
-                    modifier = Modifier.width(72.dp),
+                    modifier = Modifier.width(if (layout.isCompact) 64.dp else 80.dp),
                 )
             }
-            Column(modifier = Modifier.weight(1f)) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    SiteBadge(work.site)
-                    StatusPill(work.status)
-                    if (work.isPrivate) PrivatePill()
-                    if (downloaded) DownloadedPill()
-                    if (work.isFollowing) FollowingPill()
-                    if (resumeChapter != null) {
-                        MetaChip(
-                            text = "Continue · Ch $resumeChapter",
-                            foreground = MaterialTheme.colorScheme.primary,
-                            background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            border = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Text(
                     work.title,
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(top = 10.dp),
-                    maxLines = 3,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     "by ${work.author ?: "unknown author"}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                if (work.fandoms.isNotEmpty()) {
-                    FlowRow(
-                        modifier = Modifier.padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        work.fandoms.take(3).forEach { TagChip(it) }
-                    }
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    StatCell("Chapters", work.chapters.toString())
-                    StatCell("Words", formatNumber(work.wordCount))
-                    StatCell("Updated", relativeTime(work.lastNewChapterAt ?: work.createdAt))
-                }
                 Text(
                     buildString {
-                        append("Imported by ${work.addedBy?.name ?: "a removed user"}")
-                        if (!work.lastError.isNullOrBlank()) append(" · Update check failed")
+                        append("${work.chapters} ch · ${formatNumber(work.wordCount)} words")
+                        append(" · ${relativeTime(work.lastNewChapterAt ?: work.createdAt)}")
+                        if (resumeChapter != null) append(" · Continue Ch $resumeChapter")
                     },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (work.lastError.isNullOrBlank()) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.error
-                    },
-                    modifier = Modifier.padding(top = 10.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                FlowRow(
+                    modifier = Modifier.padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    SiteBadge(work.site)
+                    StatusPill(work.status)
+                    if (!layout.isCompact) {
+                        if (work.isPrivate) PrivatePill()
+                        if (downloaded) DownloadedPill()
+                        if (work.isFollowing) FollowingPill()
+                        work.fandoms.take(2).forEach { TagChip(it) }
+                    } else {
+                        if (downloaded) DownloadedPill()
+                        if (work.isFollowing) FollowingPill()
+                    }
+                }
+                if (!work.lastError.isNullOrBlank()) {
+                    Text(
+                        "Update check failed",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun RowScope.StatCell(label: String, value: String) {
-    Column(modifier = Modifier.weight(1f)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.titleMedium)
     }
 }
 

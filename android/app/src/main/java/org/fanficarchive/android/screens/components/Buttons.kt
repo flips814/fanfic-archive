@@ -1,15 +1,14 @@
 package org.fanficarchive.android.screens.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -17,14 +16,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-/** Pico-like control radius used by the website filters / action buttons. */
-private val ButtonShape = RoundedCornerShape(10.dp)
-private val ButtonPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
-private val ButtonMinHeight = 44.dp
+private val ButtonMinHeight = 48.dp
+private val ButtonPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp)
 
 @Composable
 fun PrimaryButton(
@@ -39,18 +34,8 @@ fun PrimaryButton(
         modifier = modifier
             .defaultMinSize(minHeight = ButtonMinHeight)
             .heightIn(min = ButtonMinHeight),
-        shape = ButtonShape,
         contentPadding = ButtonPadding,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
-            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
-        ),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
-        content = {
-            ButtonLabelRow(content)
-        },
+        content = { ButtonLabelRow(content) },
     )
 }
 
@@ -63,21 +48,13 @@ fun SecondaryButton(
     content: @Composable RowScope.() -> Unit,
 ) {
     if (filled) {
-        Button(
+        FilledTonalButton(
             onClick = onClick,
             enabled = enabled,
             modifier = modifier
                 .defaultMinSize(minHeight = ButtonMinHeight)
                 .heightIn(min = ButtonMinHeight),
-            shape = ButtonShape,
             contentPadding = ButtonPadding,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-            ),
-            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
             content = { ButtonLabelRow(content) },
         )
     } else {
@@ -87,14 +64,7 @@ fun SecondaryButton(
             modifier = modifier
                 .defaultMinSize(minHeight = ButtonMinHeight)
                 .heightIn(min = ButtonMinHeight),
-            shape = ButtonShape,
             contentPadding = ButtonPadding,
-            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else 0.38f)),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.primary,
-                disabledContentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
-                containerColor = Color.Transparent,
-            ),
             content = { ButtonLabelRow(content) },
         )
     }
@@ -110,11 +80,8 @@ fun QuietButton(
     TextButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.heightIn(min = 36.dp),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        colors = ButtonDefaults.textButtonColors(
-            contentColor = MaterialTheme.colorScheme.primary,
-        ),
+        modifier = modifier.heightIn(min = 48.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         content = { ButtonLabelRow(content) },
     )
 }
@@ -128,18 +95,16 @@ fun ToggleActionButton(
     content: @Composable RowScope.() -> Unit,
 ) {
     if (pressed) {
-        OutlinedButton(
+        FilledTonalButton(
             onClick = onClick,
             enabled = enabled,
             modifier = modifier
                 .defaultMinSize(minHeight = ButtonMinHeight)
                 .heightIn(min = ButtonMinHeight),
-            shape = ButtonShape,
             contentPadding = ButtonPadding,
-            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
-            colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                contentColor = MaterialTheme.colorScheme.primary,
+            colors = ButtonDefaults.filledTonalButtonColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             ),
             content = { ButtonLabelRow(content) },
         )
@@ -159,8 +124,5 @@ private fun ButtonLabelRow(content: @Composable RowScope.() -> Unit) {
 
 @Composable
 fun ButtonLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-    )
+    Text(text = text, style = MaterialTheme.typography.labelLarge)
 }

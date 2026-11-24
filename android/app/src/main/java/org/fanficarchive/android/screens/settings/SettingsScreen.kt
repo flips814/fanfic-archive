@@ -57,6 +57,8 @@ import org.fanficarchive.android.screens.components.MetaChip
 import org.fanficarchive.android.screens.components.PrimaryButton
 import org.fanficarchive.android.screens.components.SecondaryButton
 import org.fanficarchive.android.screens.components.relativeTime
+import org.fanficarchive.android.screens.theme.ResponsivePane
+import org.fanficarchive.android.screens.theme.rememberContentLayout
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,6 +75,7 @@ fun SettingsScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var serverInfo by remember { mutableStateOf<ServerInfo?>(null) }
+    val layout = rememberContentLayout()
     val readingProgress by repository.readingProgressForCurrentServer()
         .collectAsState(initial = emptyMap())
     val chapterAlerts by repository.chapterUpdateNotificationsEnabled
@@ -156,11 +159,10 @@ fun SettingsScreen(
             )
         },
     ) { padding ->
+        ResponsivePane(layout = layout, modifier = Modifier.padding(padding)) {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(layout.contentPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
@@ -207,7 +209,7 @@ fun SettingsScreen(
                         MetaChip(
                             text = "API v${serverInfo?.apiVersion ?: "—"}",
                             foreground = MaterialTheme.colorScheme.onSurfaceVariant,
-                            background = MaterialTheme.colorScheme.surfaceVariant,
+                            background = MaterialTheme.colorScheme.surfaceContainerHighest,
                             border = null,
                         )
                         if (profile.allowHttp) {
@@ -321,6 +323,7 @@ fun SettingsScreen(
                     ) { ButtonLabel("Disconnect server") }
                 }
             }
+        }
         }
     }
 }

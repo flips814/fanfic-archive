@@ -13,6 +13,7 @@ from app.access import (
     distinct_relationships,
     distinct_tags,
     fandoms_contain,
+    library_label_index,
     normalize_visibility,
     relationships_contain,
     tags_contain,
@@ -293,6 +294,7 @@ def list_works(
     visibility = visibility.strip().lower()
     if visibility not in (VISIBILITY_PUBLIC, VISIBILITY_PRIVATE):
         visibility = ""
+    labels = library_label_index(db, user)
     query = select(Work).where(visible_works_clause(user))
     if q:
         like = f"%{q}%"
@@ -300,11 +302,11 @@ def list_works(
     if site:
         query = query.where(Work.site == site)
     if category:
-        query = query.where(fandoms_contain(category))
+        query = query.where(fandoms_contain(category, labels["fandoms"]))
     if tag:
-        query = query.where(tags_contain(tag))
+        query = query.where(tags_contain(tag, labels["tags"]))
     if relationship:
-        query = query.where(relationships_contain(relationship))
+        query = query.where(relationships_contain(relationship, labels["relationships"]))
     if status == "complete":
         query = query.where(Work.status.ilike("complete%"))
     elif status == "ongoing":
@@ -349,9 +351,9 @@ def list_works(
         "limit": limit,
         "offset": offset,
         "sites": list(sites),
-        "categories": distinct_categories(db, user),
-        "tags": distinct_tags(db, user),
-        "relationships": distinct_relationships(db, user),
+        "categories": distinct_categories(db, user, labels["fandoms"]),
+        "tags": distinct_tags(db, user, labels["tags"]),
+        "relationships": distinct_relationships(db, user, labels["relationships"]),
     }
 
 

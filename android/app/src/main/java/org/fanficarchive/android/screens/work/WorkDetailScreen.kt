@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -19,6 +20,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -64,6 +67,8 @@ import org.fanficarchive.android.screens.components.TranslatePanel
 import org.fanficarchive.android.screens.components.TranslatedText
 import org.fanficarchive.android.screens.components.formatNumber
 import org.fanficarchive.android.screens.components.relativeTime
+import org.fanficarchive.android.screens.theme.ResponsivePane
+import org.fanficarchive.android.screens.theme.rememberContentLayout
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -93,6 +98,14 @@ fun WorkDetailScreen(
     val bookmark: ReadingProgress? = progressMap[workId]
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val layout = rememberContentLayout()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(statusMessage) {
+        val message = statusMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        statusMessage = null
+    }
 
     fun load() {
         scope.launch {
@@ -126,7 +139,7 @@ fun WorkDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(work?.title ?: "Work") },
+                title = { Text(work?.title ?: "Work", maxLines = 1) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -134,6 +147,7 @@ fun WorkDetailScreen(
                 },
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         when {
             loading && work == null -> LoadingBox(Modifier.padding(padding))
@@ -142,60 +156,88 @@ fun WorkDetailScreen(
                 val detail = work!!
                 val displayTitle = translated?.title?.takeIf { it.isNotBlank() } ?: detail.title
                 val displaySummary = translated?.contentHtml?.takeIf { it.isNotBlank() } ?: detail.summaryHtml
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+                ResponsivePane(layout = layout, modifier = Modifier.padding(padding)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(layout.contentPadding),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
                     val cover = absoluteMediaUrl(baseUrl, detail.coverUrl)
-                    if (cover != null) {
-                        CoverImage(
-                            url = cover,
-                            contentDescription = "Cover for $displayTitle",
-                            modifier = Modifier
-                                .fillMaxWidth(0.45f)
-                                .padding(bottom = 4.dp),
-                        )
-                    }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        SiteBadge(detail.site)
-                        StatusPill(detail.status)
-                        if (detail.isPrivate) PrivatePill() else PublicPill()
-                        if (downloaded) DownloadedPill()
-                        if (detail.isFollowing) FollowingPill()
-                        if (detail.rating != null) {
-                            MetaChip(text = detail.rating)
+                    @Composable
+                    fun HeroMeta() {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            SiteBadge(detail.site)
+                            StatusPill(detail.status)
+                            if (detail.isPrivate) PrivatePill() else PublicPill()
+                            if (downloaded) DownloadedPill()
+                            if (detail.isFollowing) FollowingPill()
+                            if (detail.rating != null) {
+                                MetaChip(text = detail.rating)
+                            }
+                            MetaChip(text = "${detail.commentCount} comments")
                         }
-                        MetaChip(text = "${detail.commentCount} comments")
-                    }
-                    if (detail.fromOffline) {
+                        if (detail.fromOffline) {
+                            Text(
+                                "Showing your offline copy — connect to the server to refresh.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(displayTitle, style = MaterialTheme.typography.headlineSmall)
                         Text(
-                            "Showing your offline copy — connect to the server to refresh.",
+                            "by ${detail.author ?: "unknown author"}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            listOfNotNull(
+                                "${detail.chapters} chapters",
+                                "${formatNumber(detail.wordCount)} words",
+                                detail.addedBy?.let { "imported by ${it.name}" },
+                                "updated ${relativeTime(detail.lastNewChapterAt ?: detail.createdAt)}",
+                            ).joinToString(" · "),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        detail.lastError?.let {
+                            Text("Update error: $it", color = MaterialTheme.colorScheme.error)
+                        }
                     }
-                    Text(displayTitle, style = MaterialTheme.typography.headlineSmall)
-                    Text(
-                        "by ${detail.author ?: "unknown author"}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        listOfNotNull(
-                            "${detail.chapters} chapters",
-                            "${formatNumber(detail.wordCount)} words",
-                            detail.addedBy?.let { "imported by ${it.name}" },
-                            "updated ${relativeTime(detail.lastNewChapterAt ?: detail.createdAt)}",
-                        ).joinToString(" · "),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    detail.lastError?.let {
-                        Text("Update error: $it", color = MaterialTheme.colorScheme.error)
+                    if (!layout.isCompact && cover != null) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(20.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            CoverImage(
+                                url = cover,
+                                contentDescription = "Cover for $displayTitle",
+                                modifier = Modifier
+                                    .widthIn(max = 200.dp)
+                                    .fillMaxWidth(0.32f),
+                            )
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                HeroMeta()
+                            }
+                        }
+                    } else {
+                        if (cover != null) {
+                            CoverImage(
+                                url = cover,
+                                contentDescription = "Cover for $displayTitle",
+                                modifier = Modifier
+                                    .fillMaxWidth(if (layout.isCompact) 0.45f else 0.32f)
+                                    .padding(bottom = 4.dp),
+                            )
+                        }
+                        HeroMeta()
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         val firstChapter = detail.chapterList.firstOrNull()?.number
@@ -355,9 +397,12 @@ fun WorkDetailScreen(
                         request = { to -> repository.requestWorkTranslation(workId, to) },
                         poll = { to -> repository.getWorkTranslation(workId, to) },
                     )
-                    downloadProgress?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-                    statusMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-                    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    downloadProgress?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                    }
+                    error?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                    }
                     TagGroup("Fandoms", detail.fandoms)
                     TagGroup("Warnings", detail.warnings)
                     TagGroup("Relationships", detail.relationships)
@@ -433,6 +478,7 @@ fun WorkDetailScreen(
                                 }
                             },
                         ) { ButtonLabel("Delete work") }
+                    }
                     }
                 }
             }

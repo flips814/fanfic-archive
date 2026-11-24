@@ -2,6 +2,8 @@ package org.fanficarchive.android.screens.activity
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,8 +39,10 @@ import org.fanficarchive.android.screens.components.JobStatusPill
 import org.fanficarchive.android.screens.components.LoadingBox
 import org.fanficarchive.android.screens.components.PrivatePill
 import org.fanficarchive.android.screens.components.relativeTime
+import org.fanficarchive.android.screens.theme.ResponsivePane
+import org.fanficarchive.android.screens.theme.rememberContentLayout
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ActivityScreen(
     repository: ArchiveRepository,
@@ -51,6 +55,7 @@ fun ActivityScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val layout = rememberContentLayout()
 
     fun refresh() {
         scope.launch {
@@ -92,22 +97,21 @@ fun ActivityScreen(
             )
         },
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        ResponsivePane(layout = layout, modifier = Modifier.padding(padding)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            FlowRow(
+                modifier = Modifier.padding(horizontal = layout.contentPadding, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 FilterTag(label = "All", selected = kind == "", onClick = { kind = "" })
                 FilterTag(label = "Imports", selected = kind == "import", onClick = { kind = "import" })
                 FilterTag(label = "Updates", selected = kind == "update", onClick = { kind = "update" })
             }
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp),
+            FlowRow(
+                modifier = Modifier.padding(horizontal = layout.contentPadding),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 listOf("" to "Any", "done" to "Done", "failed" to "Failed", "running" to "Running", "queued" to "Queued")
                     .forEach { (value, label) ->
@@ -123,7 +127,7 @@ fun ActivityScreen(
                 error != null -> ErrorText(error!!)
                 jobs.isEmpty() -> EmptyState("No activity yet", "Imports and update checks will show up here.")
                 else -> LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
+                    contentPadding = PaddingValues(layout.contentPadding),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(jobs, key = { it.id }) { job ->
@@ -171,6 +175,7 @@ fun ActivityScreen(
                     }
                 }
             }
+        }
         }
     }
 }

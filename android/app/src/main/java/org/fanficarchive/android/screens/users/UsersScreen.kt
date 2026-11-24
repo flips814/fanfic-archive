@@ -40,6 +40,8 @@ import org.fanficarchive.android.screens.components.ErrorText
 import org.fanficarchive.android.screens.components.FanficCard
 import org.fanficarchive.android.screens.components.LoadingBox
 import org.fanficarchive.android.screens.components.relativeTime
+import org.fanficarchive.android.screens.theme.ResponsivePane
+import org.fanficarchive.android.screens.theme.rememberContentLayout
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +51,7 @@ fun UsersScreen(repository: ArchiveRepository) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val layout = rememberContentLayout()
 
     fun refresh() {
         scope.launch {
@@ -78,15 +81,14 @@ fun UsersScreen(repository: ArchiveRepository) {
             )
         },
     ) { padding ->
+        ResponsivePane(layout = layout, modifier = Modifier.padding(padding)) {
         when {
-            loading -> LoadingBox(Modifier.padding(padding))
-            error != null -> ErrorText(error!!, Modifier.padding(padding))
-            users.isEmpty() -> EmptyState("No users yet", "People who sign in will appear here.", Modifier.padding(padding))
+            loading -> LoadingBox()
+            error != null -> ErrorText(error!!)
+            users.isEmpty() -> EmptyState("No users yet", "People who sign in will appear here.")
             else -> LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(16.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(layout.contentPadding),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(users, key = { it.id }) { user ->
@@ -146,6 +148,7 @@ fun UsersScreen(repository: ArchiveRepository) {
                     }
                 }
             }
+        }
         }
     }
 }

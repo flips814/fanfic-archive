@@ -44,6 +44,8 @@ import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.FanficTextField
 import org.fanficarchive.android.screens.components.PrimaryButton
 import org.fanficarchive.android.screens.components.SecondaryButton
+import org.fanficarchive.android.screens.theme.ResponsivePane
+import org.fanficarchive.android.screens.theme.rememberContentLayout
 
 @Composable
 fun LoginScreen(
@@ -61,6 +63,7 @@ fun LoginScreen(
     var info by remember { mutableStateOf(serverInfo) }
     var browserMode by remember { mutableStateOf<BrowserLoginMode?>(null) }
     val scope = rememberCoroutineScope()
+    val layout = rememberContentLayout()
     val localAvailable = info?.auth?.local == true
     val oidcAvailable = info?.auth?.oidc == true
     val providerName = info?.auth?.oidcProviderName?.takeIf { it.isNotBlank() } ?: "SSO"
@@ -90,11 +93,11 @@ fun LoginScreen(
     }
 
     Scaffold { padding ->
+        ResponsivePane(layout = layout, modifier = Modifier.padding(padding)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp)
+                .padding(layout.contentPadding.coerceAtLeast(24.dp))
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -181,6 +184,7 @@ fun LoginScreen(
             SecondaryButton(onClick = onChangeServer, modifier = Modifier.fillMaxWidth()) {
                 ButtonLabel("Change server")
             }
+        }
         }
     }
 }

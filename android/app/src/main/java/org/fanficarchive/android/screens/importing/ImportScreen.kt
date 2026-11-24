@@ -15,9 +15,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,11 +34,14 @@ import org.fanficarchive.android.data.ImportResponse
 import org.fanficarchive.android.data.VISIBILITY_PRIVATE
 import org.fanficarchive.android.data.VISIBILITY_PUBLIC
 import org.fanficarchive.android.screens.components.ButtonLabel
+import org.fanficarchive.android.screens.components.FanficCard
 import org.fanficarchive.android.screens.components.FanficTextField
 import org.fanficarchive.android.screens.components.FilterTag
 import org.fanficarchive.android.screens.components.JobStatusPill
 import org.fanficarchive.android.screens.components.PrimaryButton
 import org.fanficarchive.android.screens.components.PrivatePill
+import org.fanficarchive.android.screens.theme.ResponsivePane
+import org.fanficarchive.android.screens.theme.rememberContentLayout
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,14 +54,25 @@ fun ImportScreen(
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var result by remember { mutableStateOf<ImportResponse?>(null) }
+    val layout = rememberContentLayout()
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(result) {
+        val response = result ?: return@LaunchedEffect
+        val count = response.jobs.size
+        snackbarHostState.showSnackbar(
+            "Queued $count job${if (count == 1) "" else "s"}" +
+                if (visibility == VISIBILITY_PRIVATE) " as private" else "",
+        )
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text("Add works")
+                        Text("Add works", style = MaterialTheme.typography.titleLarge)
                         Text(
                             "Paste story URLs, one per line",
                             style = MaterialTheme.typography.bodyMedium,
@@ -72,12 +89,13 @@ fun ImportScreen(
                 },
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
+        ResponsivePane(layout = layout, modifier = Modifier.padding(padding)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
+                .padding(layout.contentPadding)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -144,28 +162,31 @@ fun ImportScreen(
             ) {
                 ButtonLabel(if (loading) "Queuing…" else "Queue imports")
             }
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            error?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            }
             result?.let { response ->
-                Text(
-                    "Queued ${response.jobs.size} job${if (response.jobs.size == 1) "" else "s"}" +
-                        if (visibility == VISIBILITY_PRIVATE) " as private." else ".",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.titleMedium,
-                )
                 response.jobs.forEach { job ->
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FanficCard {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             JobStatusPill(job.status)
                             if (job.isPrivate) PrivatePill()
                         }
-                        Text(job.url.orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            job.url.orEmpty(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
                     }
                 }
                 if (response.rejected.isNotEmpty()) {
-                    Text("Rejected:", color = MaterialTheme.colorScheme.error)
-                    response.rejected.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                    Text("Rejected", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleSmall)
+                    response.rejected.forEach {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
+        }
         }
     }
 }

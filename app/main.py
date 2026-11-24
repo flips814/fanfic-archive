@@ -22,6 +22,7 @@ from app.access import (
     distinct_relationships,
     distinct_tags,
     fandoms_contain,
+    library_label_index,
     normalize_visibility,
     relationships_contain,
     tags_contain,
@@ -242,6 +243,7 @@ def library(
     chapter_count = (
         select(func.count(Chapter.id)).where(Chapter.work_id == Work.id).correlate(Work).scalar_subquery()
     )
+    labels = library_label_index(db, user)
     query = select(Work, chapter_count.label("chapter_count")).where(visible_works_clause(user))
     if q:
         like = f"%{q}%"
@@ -249,11 +251,11 @@ def library(
     if site:
         query = query.where(Work.site == site)
     if category:
-        query = query.where(fandoms_contain(category))
+        query = query.where(fandoms_contain(category, labels["fandoms"]))
     if tag:
-        query = query.where(tags_contain(tag))
+        query = query.where(tags_contain(tag, labels["tags"]))
     if relationship:
-        query = query.where(relationships_contain(relationship))
+        query = query.where(relationships_contain(relationship, labels["relationships"]))
     if added_by_id:
         query = query.where(Work.added_by_id == added_by_id)
     if status == "complete":
@@ -288,9 +290,9 @@ def library(
     sites = db.scalars(
         select(Work.site).where(visible_works_clause(user)).distinct().order_by(Work.site)
     ).all()
-    categories = distinct_categories(db, user)
-    tags = distinct_tags(db, user)
-    relationships = distinct_relationships(db, user)
+    categories = distinct_categories(db, user, labels["fandoms"])
+    tags = distinct_tags(db, user, labels["tags"])
+    relationships = distinct_relationships(db, user, labels["relationships"])
     users = db.scalars(select(User).order_by(User.display_name)).all()
     return render(
         request,
