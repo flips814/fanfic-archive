@@ -62,6 +62,8 @@ data class WorkSummary(
     @SerialName("word_count") val wordCount: Int? = null,
     val chapters: Int = 0,
     val fandoms: List<String> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val relationships: List<String> = emptyList(),
     @SerialName("added_by") val addedBy: UserRef? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("last_checked_at") val lastCheckedAt: String? = null,
@@ -83,6 +85,9 @@ data class WorkListResponse(
     val limit: Int = 100,
     val offset: Int = 0,
     val sites: List<String> = emptyList(),
+    val categories: List<String> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val relationships: List<String> = emptyList(),
 )
 
 @Serializable

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, cast, exists, func, or_, select
+from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
 
 from app.models import ImportJob, User, Work
@@ -80,3 +81,56 @@ def prune_followers_for_privacy(work: Work) -> None:
     for follow in list(work.followers):
         if follow.user_id != work.added_by_id:
             work.followers.remove(follow)
+
+
+def _json_list_contains(column, value: str, *, alias: str) -> ColumnElement[bool]:
+    """True when a JSON string-array column includes ``value`` exactly."""
+    from app.db import engine
+
+    if engine.dialect.name == "postgresql":
+        from sqlalchemy.dialects.postgresql import JSONB
+
+        return cast(column, JSONB).contains([value])
+    elements = func.json_each(column).table_valued("value").alias(alias)
+    return exists(select(1).select_from(elements).where(elements.c.value == value))
+
+
+def fandoms_contain(category: str) -> ColumnElement[bool]:
+    """True when ``Work.fandoms`` (site category / fandom list) includes ``category`` exactly."""
+    return _json_list_contains(Work.fandoms, category, alias="fandom_el")
+
+
+def tags_contain(tag: str) -> ColumnElement[bool]:
+    """True when ``Work.tags`` includes ``tag`` exactly."""
+    return _json_list_contains(Work.tags, tag, alias="tag_el")
+
+
+def relationships_contain(relationship: str) -> ColumnElement[bool]:
+    """True when ``Work.relationships`` includes ``relationship`` exactly."""
+    return _json_list_contains(Work.relationships, relationship, alias="relationship_el")
+
+
+def _distinct_json_labels(db: Session, user: User, column) -> list[str]:
+    rows = db.scalars(select(column).where(visible_works_clause(user))).all()
+    names = {
+        name.strip()
+        for row in rows
+        for name in (row or [])
+        if isinstance(name, str) and name.strip()
+    }
+    return sorted(names, key=str.casefold)
+
+
+def distinct_categories(db: Session, user: User) -> list[str]:
+    """Sorted unique fandom/category labels from works ``user`` can see."""
+    return _distinct_json_labels(db, user, Work.fandoms)
+
+
+def distinct_tags(db: Session, user: User) -> list[str]:
+    """Sorted unique tags from works ``user`` can see."""
+    return _distinct_json_labels(db, user, Work.tags)
+
+
+def distinct_relationships(db: Session, user: User) -> list[str]:
+    """Sorted unique relationship labels from works ``user`` can see."""
+    return _distinct_json_labels(db, user, Work.relationships)

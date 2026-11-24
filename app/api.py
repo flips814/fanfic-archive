@@ -9,7 +9,13 @@ from app.access import (
     VISIBILITY_PUBLIC,
     can_view,
     can_view_job,
+    distinct_categories,
+    distinct_relationships,
+    distinct_tags,
+    fandoms_contain,
     normalize_visibility,
+    relationships_contain,
+    tags_contain,
     prune_followers_for_privacy,
     visibility_filter_clause,
     visible_jobs_clause,
@@ -131,6 +137,8 @@ def _work(
         "visibility": w.visibility or VISIBILITY_PUBLIC,
         "last_error": w.last_error,
         "fandoms": w.fandoms or [],
+        "tags": w.tags or [],
+        "relationships": w.relationships or [],
         "cover_url": covers.cover_url_path(w.id),
     }
     if is_following is not None:
@@ -149,9 +157,7 @@ def _work(
     if full:
         counts = chapter_comment_counts or {}
         data.update(
-            relationships=w.relationships or [],
             characters=w.characters or [],
-            tags=w.tags or [],
             warnings=w.warnings or [],
             summary_html=w.summary_html,
             chapter_list=[
@@ -266,6 +272,9 @@ def me(user: User = Depends(current_user)):
 def list_works(
     q: str = "",
     site: str = "",
+    category: str = "",
+    tag: str = "",
+    relationship: str = "",
     status: str = "",
     visibility: str = "",
     mine: str = "",
@@ -278,6 +287,9 @@ def list_works(
 ):
     limit = min(max(limit, 1), 500)
     offset = max(offset, 0)
+    category = category.strip()
+    tag = tag.strip()
+    relationship = relationship.strip()
     visibility = visibility.strip().lower()
     if visibility not in (VISIBILITY_PUBLIC, VISIBILITY_PRIVATE):
         visibility = ""
@@ -287,6 +299,12 @@ def list_works(
         query = query.where(or_(Work.title.ilike(like), Work.author.ilike(like)))
     if site:
         query = query.where(Work.site == site)
+    if category:
+        query = query.where(fandoms_contain(category))
+    if tag:
+        query = query.where(tags_contain(tag))
+    if relationship:
+        query = query.where(relationships_contain(relationship))
     if status == "complete":
         query = query.where(Work.status.ilike("complete%"))
     elif status == "ongoing":
@@ -331,6 +349,9 @@ def list_works(
         "limit": limit,
         "offset": offset,
         "sites": list(sites),
+        "categories": distinct_categories(db, user),
+        "tags": distinct_tags(db, user),
+        "relationships": distinct_relationships(db, user),
     }
 
 

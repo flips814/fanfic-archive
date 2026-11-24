@@ -29,7 +29,9 @@ def test_all_pages_render(fake_site, sent):
     with SessionLocal() as db:
         work_id = db.scalar(select(Work.id))
     for path in [
-        "/", "/?q=rendered&site=fake.test&status=ongoing&mine=1", "/?added_by=&site=",
+        "/", "/?q=rendered&site=fake.test&status=ongoing&mine=1",
+        "/?category=Testing%20Fandom&tag=fluff&relationship=",
+        "/?added_by=&site=&category=&tag=&relationship=",
         "/add", f"/works/{work_id}", f"/works/{work_id}/chapters/1", f"/works/{work_id}/chapters/2",
         "/activity", "/activity?user_id=0", "/activity?user_id=&kind=import&status=done",
         "/users", "/settings",
@@ -39,6 +41,71 @@ def test_all_pages_render(fake_site, sent):
     assert "Rendered Fic" in alice.get("/").text
     assert "Text of chapter 2" in alice.get(f"/works/{work_id}/chapters/2").text
     assert alice.get(f"/works/{work_id}/chapters/99").status_code == 404
+
+
+def test_library_category_tag_and_relationship_filters(fake_site, sent):
+    alice = login("alice")
+    alice.post(
+        "/add",
+        data={"urls": "\n".join([
+            fake_site.add_work("1", "Potter Fic", chapters=1),
+            fake_site.add_work("2", "Original Fic", chapters=1),
+        ])},
+    )
+    assert drain() == 2
+    with SessionLocal() as db:
+        for work in db.scalars(select(Work)).all():
+            if "Potter" in work.title:
+                work.fandoms = ["Harry Potter"]
+                work.tags = ["angst", "slow burn"]
+                work.relationships = ["Harry Potter/Hermione Granger"]
+            else:
+                work.fandoms = ["Original Work"]
+                work.tags = ["fluff"]
+                work.relationships = ["Original Character/Original Character"]
+        db.commit()
+
+    page = alice.get("/").text
+    assert 'name="category"' in page and 'name="tag"' in page and 'name="relationship"' in page
+    assert "Harry Potter" in page and "Original Work" in page
+    assert "angst" in page and "fluff" in page
+    assert "Harry Potter/Hermione Granger" in page
+
+    by_category = alice.get("/", params={"category": "Harry Potter"}).text
+    assert "Potter Fic" in by_category
+    assert "Original Fic" not in by_category
+
+    by_tag = alice.get("/", params={"tag": "fluff"}).text
+    assert "Original Fic" in by_tag
+    assert "Potter Fic" not in by_tag
+
+    by_rel = alice.get("/", params={"relationship": "Harry Potter/Hermione Granger"}).text
+    assert "Potter Fic" in by_rel
+    assert "Original Fic" not in by_rel
+
+    both = alice.get("/", params={"category": "Harry Potter", "tag": "angst"}).text
+    assert "Potter Fic" in both
+    assert "Original Fic" not in both
+
+    api = alice.get("/api/works", params={"category": "Harry Potter"}).json()
+    assert api["total"] == 1
+    assert api["works"][0]["title"] == "Potter Fic"
+    assert "angst" in api["works"][0]["tags"]
+    assert "Harry Potter/Hermione Granger" in api["works"][0]["relationships"]
+    assert "Harry Potter" in api["categories"] and "Original Work" in api["categories"]
+    assert "fluff" in api["tags"] and "angst" in api["tags"]
+    assert "Harry Potter/Hermione Granger" in api["relationships"]
+
+    api_tag = alice.get("/api/works", params={"tag": "slow burn"}).json()
+    assert api_tag["total"] == 1 and api_tag["works"][0]["title"] == "Potter Fic"
+
+    api_rel = alice.get("/api/works", params={"relationship": "Original Character/Original Character"}).json()
+    assert api_rel["total"] == 1 and api_rel["works"][0]["title"] == "Original Fic"
+
+    miss = alice.get("/api/works", params={"category": "Missing Fandom"}).json()
+    assert miss["total"] == 0 and miss["works"] == []
+    assert alice.get("/api/works", params={"tag": "missing-tag"}).json()["total"] == 0
+    assert alice.get("/api/works", params={"relationship": "Nobody/Nobody"}).json()["total"] == 0
 
 
 def test_epub_download(fake_site, sent):

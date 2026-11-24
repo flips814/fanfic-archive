@@ -421,9 +421,10 @@ def admin_cancel_job(request: Request, job_id: int, db: Session = Depends(get_db
 
 @router.post("/admin/jobs/check-all")
 def admin_check_all(request: Request, db: Session = Depends(get_db), user: User = Depends(require_admin)):
+    # Every work in the archive — public and private — gets an update check.
     count = sum(
         1
-        for work in db.scalars(select(Work).where(visible_works_clause(user)))
+        for work in db.scalars(select(Work))
         if enqueue_update(db, work, user) is not None
     )
     db.commit()

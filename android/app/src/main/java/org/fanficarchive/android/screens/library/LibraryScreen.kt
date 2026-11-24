@@ -59,12 +59,18 @@ fun LibraryScreen(
 ) {
     var query by remember { mutableStateOf("") }
     var site by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("") }
+    var tag by remember { mutableStateOf("") }
+    var relationship by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
     var visibility by remember { mutableStateOf("") }
     var followedOnly by remember { mutableStateOf(false) }
     var downloadedOnly by remember { mutableStateOf(false) }
     var showFilters by remember { mutableStateOf(false) }
     var sites by remember { mutableStateOf<List<String>>(emptyList()) }
+    var categories by remember { mutableStateOf<List<String>>(emptyList()) }
+    var tags by remember { mutableStateOf<List<String>>(emptyList()) }
+    var relationships by remember { mutableStateOf<List<String>>(emptyList()) }
     var works by remember { mutableStateOf<List<WorkSummary>>(emptyList()) }
     var downloadedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var total by remember { mutableStateOf(0) }
@@ -103,6 +109,15 @@ fun LibraryScreen(
                 if (site.isNotBlank()) {
                     offline = offline.filter { it.site == site }
                 }
+                if (category.isNotBlank()) {
+                    offline = offline.filter { category in it.fandoms }
+                }
+                if (tag.isNotBlank()) {
+                    offline = offline.filter { tag in it.tags }
+                }
+                if (relationship.isNotBlank()) {
+                    offline = offline.filter { relationship in it.relationships }
+                }
                 works = offline
                 total = offline.size
                 loading = false
@@ -112,6 +127,9 @@ fun LibraryScreen(
                 repository.listWorks(
                     query = query,
                     site = site.ifBlank { null },
+                    category = category.ifBlank { null },
+                    tag = tag.ifBlank { null },
+                    relationship = relationship.ifBlank { null },
                     status = status.ifBlank { null },
                     visibility = visibility.ifBlank { null },
                     followedOnly = followedOnly,
@@ -120,6 +138,9 @@ fun LibraryScreen(
                 works = it.works
                 total = it.total
                 if (it.sites.isNotEmpty()) sites = it.sites
+                if (it.categories.isNotEmpty()) categories = it.categories
+                if (it.tags.isNotEmpty()) tags = it.tags
+                if (it.relationships.isNotEmpty()) relationships = it.relationships
             }.onFailure { err ->
                 // If the server is down, still show local downloads.
                 val offline = repository.listOfflineWorks()
@@ -136,10 +157,13 @@ fun LibraryScreen(
         }
     }
 
-    LaunchedEffect(site, status, visibility, followedOnly, downloadedOnly) { refresh() }
+    LaunchedEffect(site, category, tag, relationship, status, visibility, followedOnly, downloadedOnly) { refresh() }
 
     val activeFilters = listOfNotNull(
         site.ifBlank { null },
+        category.ifBlank { null },
+        tag.ifBlank { null },
+        relationship.ifBlank { null },
         status.ifBlank { null },
         visibility.ifBlank { null },
         if (followedOnly) "following" else null,
@@ -262,6 +286,99 @@ fun LibraryScreen(
                                     DropdownMenuItem(
                                         text = { Text(siteLabel(option)) },
                                         onClick = { site = option; expanded = false },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (categories.isNotEmpty() || category.isNotBlank()) {
+                        var expanded by remember { mutableStateOf(false) }
+                        val options = if (category.isNotBlank() && category !in categories) {
+                            listOf(category) + categories
+                        } else {
+                            categories
+                        }
+                        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+                            FanficTextField(
+                                value = if (category.isBlank()) "All categories" else category,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = "Category",
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                                textFieldModifier = Modifier.menuAnchor(),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("All categories") },
+                                    onClick = { category = ""; expanded = false },
+                                )
+                                options.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option) },
+                                        onClick = { category = option; expanded = false },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (tags.isNotEmpty() || tag.isNotBlank()) {
+                        var expanded by remember { mutableStateOf(false) }
+                        val options = if (tag.isNotBlank() && tag !in tags) {
+                            listOf(tag) + tags
+                        } else {
+                            tags
+                        }
+                        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+                            FanficTextField(
+                                value = if (tag.isBlank()) "All tags" else tag,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = "Tag",
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                                textFieldModifier = Modifier.menuAnchor(),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("All tags") },
+                                    onClick = { tag = ""; expanded = false },
+                                )
+                                options.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option) },
+                                        onClick = { tag = option; expanded = false },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (relationships.isNotEmpty() || relationship.isNotBlank()) {
+                        var expanded by remember { mutableStateOf(false) }
+                        val options = if (relationship.isNotBlank() && relationship !in relationships) {
+                            listOf(relationship) + relationships
+                        } else {
+                            relationships
+                        }
+                        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+                            FanficTextField(
+                                value = if (relationship.isBlank()) "All relationships" else relationship,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = "Relationship",
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                                textFieldModifier = Modifier.menuAnchor(),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("All relationships") },
+                                    onClick = { relationship = ""; expanded = false },
+                                )
+                                options.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option) },
+                                        onClick = { relationship = option; expanded = false },
                                     )
                                 }
                             }

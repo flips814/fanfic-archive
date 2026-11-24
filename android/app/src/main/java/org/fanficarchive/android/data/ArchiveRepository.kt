@@ -47,6 +47,8 @@ class ArchiveRepository(
 
     val profile: Flow<ServerProfile> = prefs.profile
     val readerPrefs: Flow<ReaderPrefs> = prefs.readerPrefs
+    val chapterUpdateNotificationsEnabled: Flow<Boolean> = prefs.chapterUpdateNotificationsEnabled
+    val preferences: ServerPreferences get() = prefs
 
     private fun normalizeBaseUrl(raw: String): String {
         var url = raw.trim().trimEnd('/')
@@ -148,6 +150,12 @@ class ArchiveRepository(
         prefs.clearServer()
     }
 
+    /** True when the device should poll for chapter-update alerts. */
+    suspend fun shouldPollChapterUpdates(): Boolean {
+        val profile = prefs.profile.first()
+        return profile.loggedIn && profile.baseUrl.isNotBlank() && prefs.chapterUpdateNotificationsEnabled()
+    }
+
     suspend fun me(): UserMe = api().me()
 
     /**
@@ -183,6 +191,9 @@ class ArchiveRepository(
     suspend fun listWorks(
         query: String = "",
         site: String? = null,
+        category: String? = null,
+        tag: String? = null,
+        relationship: String? = null,
         status: String? = null,
         visibility: String? = null,
         followedOnly: Boolean = false,
@@ -192,6 +203,9 @@ class ArchiveRepository(
     ): WorkListResponse = api().listWorks(
         q = query.ifBlank { null },
         site = site?.ifBlank { null },
+        category = category?.ifBlank { null },
+        tag = tag?.ifBlank { null },
+        relationship = relationship?.ifBlank { null },
         status = status?.ifBlank { null },
         visibility = visibility?.ifBlank { null },
         followed = if (followedOnly) "1" else null,
@@ -387,6 +401,10 @@ class ArchiveRepository(
 
     suspend fun listNotifications(limit: Int = 50): StoryNotificationList =
         api().notifications(limit = limit)
+
+    suspend fun setChapterUpdateNotificationsEnabled(enabled: Boolean) {
+        prefs.setChapterUpdateNotificationsEnabled(enabled)
+    }
 
     suspend fun getSettings(): NotificationSettings = api().getSettings()
 

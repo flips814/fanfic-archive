@@ -18,7 +18,13 @@ from app.access import (
     VISIBILITY_PUBLIC,
     can_view,
     can_view_job,
+    distinct_categories,
+    distinct_relationships,
+    distinct_tags,
+    fandoms_contain,
     normalize_visibility,
+    relationships_contain,
+    tags_contain,
     prune_followers_for_privacy,
     visibility_filter_clause,
     visible_jobs_clause,
@@ -213,6 +219,9 @@ def library(
     request: Request,
     q: str = "",
     site: str = "",
+    category: str = "",
+    tag: str = "",
+    relationship: str = "",
     added_by: str = "",
     status: str = "",
     visibility: str = "",
@@ -224,6 +233,9 @@ def library(
     if user is None:
         return render(request, "landing.html", None)
     added_by_id = _int_or_none(added_by)
+    category = category.strip()
+    tag = tag.strip()
+    relationship = relationship.strip()
     visibility = visibility.strip().lower()
     if visibility not in (VISIBILITY_PUBLIC, VISIBILITY_PRIVATE):
         visibility = ""
@@ -236,6 +248,12 @@ def library(
         query = query.where(or_(Work.title.ilike(like), Work.author.ilike(like)))
     if site:
         query = query.where(Work.site == site)
+    if category:
+        query = query.where(fandoms_contain(category))
+    if tag:
+        query = query.where(tags_contain(tag))
+    if relationship:
+        query = query.where(relationships_contain(relationship))
     if added_by_id:
         query = query.where(Work.added_by_id == added_by_id)
     if status == "complete":
@@ -270,6 +288,9 @@ def library(
     sites = db.scalars(
         select(Work.site).where(visible_works_clause(user)).distinct().order_by(Work.site)
     ).all()
+    categories = distinct_categories(db, user)
+    tags = distinct_tags(db, user)
+    relationships = distinct_relationships(db, user)
     users = db.scalars(select(User).order_by(User.display_name)).all()
     return render(
         request,
@@ -282,10 +303,16 @@ def library(
         followed=followed,
         reading_progress=reading_progress,
         sites=sites,
+        categories=categories,
+        tags=tags,
+        relationships=relationships,
         users=users,
         filters={
             "q": q,
             "site": site,
+            "category": category,
+            "tag": tag,
+            "relationship": relationship,
             "added_by": added_by_id,
             "status": status,
             "visibility": visibility,

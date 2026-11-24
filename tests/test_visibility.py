@@ -1,12 +1,14 @@
 """Private vs public work visibility."""
 
 from dataclasses import replace
+from datetime import timedelta
 
 from sqlalchemy import select
 
 from app import notify
 from app.db import SessionLocal
-from app.models import ImportJob, Work
+from app.jobs import schedule_due_updates
+from app.models import ImportJob, Work, utcnow
 from tests.conftest import drain, login, user_id
 
 
@@ -222,3 +224,99 @@ def test_api_import_visibility(fake_site, sent):
     assert bob.get(f"/api/works/{work_id}").status_code == 404
     assert alice.post(f"/api/works/{work_id}/visibility", json={"visibility": "public"}).json()["visibility"] == "public"
     assert bob.get(f"/api/works/{work_id}").status_code == 200
+
+
+def test_owner_can_manually_check_private_and_public(fake_site, sent):
+    alice = login("alice")
+    private_url = fake_site.add_work("1", "Private Check", chapters=1)
+    public_url = fake_site.add_work("2", "Public Check", chapters=1)
+    alice.post("/add", data={"urls": private_url, "visibility": "private"})
+    alice.post("/add", data={"urls": public_url, "visibility": "public"})
+    assert drain() == 2
+
+    with SessionLocal() as db:
+        private = db.scalars(select(Work).where(Work.source_url == private_url)).one()
+        public = db.scalars(select(Work).where(Work.source_url == public_url)).one()
+        private_id, public_id = private.id, public.id
+
+    fake_site.add_chapter("1", "Private New")
+    fake_site.add_chapter("2", "Public New")
+    assert alice.post(f"/works/{private_id}/check").status_code in (200, 303)
+    assert alice.post(f"/works/{public_id}/check").status_code in (200, 303)
+    assert drain() == 2
+
+    with SessionLocal() as db:
+        private = db.get(Work, private_id)
+        public = db.get(Work, public_id)
+        assert len(private.chapters) == 2
+        assert len(public.chapters) == 2
+        assert private.last_error is None
+        assert public.last_error is None
+
+
+def test_scheduled_update_checks_private_works(fake_site, sent):
+    """Auto-updater must refresh every user's private works, not only public ones."""
+    alice = login("alice")
+    url, work_id = _import_private(fake_site, alice, work_id="9", title="Private Auto", chapters=1)
+    fake_site.add_chapter("9", "Secret Chapter")
+
+    with SessionLocal() as db:
+        work = db.get(Work, work_id)
+        work.last_checked_at = utcnow() - timedelta(days=30)
+        db.commit()
+        assert schedule_due_updates(db) == 1
+        db.commit()
+    assert drain() == 1
+
+    with SessionLocal() as db:
+        work = db.get(Work, work_id)
+        assert len(work.chapters) == 2
+        assert work.chapters[-1].title == "Secret Chapter"
+        assert work.last_error is None
+        job = db.scalars(select(ImportJob).order_by(ImportJob.id.desc())).first()
+        assert job.kind == "update"
+        assert job.status == "done"
+        assert job.requested_by_id is None
+        assert job.visibility == "private"
+
+
+def test_scheduled_update_queues_public_and_private_together(fake_site, sent):
+    alice = login("alice")
+    private_url = fake_site.add_work("10", "Priv Due", chapters=1)
+    public_url = fake_site.add_work("11", "Pub Due", chapters=1)
+    alice.post("/add", data={"urls": private_url, "visibility": "private"})
+    alice.post("/add", data={"urls": public_url, "visibility": "public"})
+    assert drain() == 2
+
+    with SessionLocal() as db:
+        for work in db.scalars(select(Work)):
+            assert work.auto_update is True
+            work.last_checked_at = utcnow() - timedelta(days=30)
+        db.commit()
+        assert schedule_due_updates(db) == 2
+        db.commit()
+    assert drain() == 2
+
+    with SessionLocal() as db:
+        jobs = db.scalars(
+            select(ImportJob).where(ImportJob.kind == "update").order_by(ImportJob.id)
+        ).all()
+        assert len(jobs) == 2
+        assert all(j.status == "done" for j in jobs)
+        assert {j.visibility for j in jobs} == {"private", "public"}
+
+
+def test_admin_check_all_includes_others_private_works(fake_site, sent):
+    alice, admin = login("alice"), login("admin", admin=True)
+    url, work_id = _import_private(fake_site, alice, work_id="12", title="Alice Private", chapters=1)
+    fake_site.add_chapter("12", "Admin Queued Chapter")
+
+    resp = admin.post("/admin/jobs/check-all", follow_redirects=False)
+    assert resp.status_code in (200, 303)
+    assert drain() >= 1
+
+    with SessionLocal() as db:
+        work = db.get(Work, work_id)
+        assert len(work.chapters) == 2
+        assert work.chapters[-1].title == "Admin Queued Chapter"
+        assert work.last_error is None

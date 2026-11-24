@@ -57,6 +57,9 @@ class ServerPreferences(private val context: Context) {
     private val readerThemeKey = stringPreferencesKey("reader_theme")
     private val translateToKey = stringPreferencesKey("translate_to")
     private val readingProgressKey = stringPreferencesKey("reading_progress")
+    private val chapterUpdateNotifyKey = booleanPreferencesKey("chapter_update_notify")
+    private val chapterUpdateSeededKey = booleanPreferencesKey("chapter_update_seeded")
+    private val seenUpdateNotificationIdsKey = stringPreferencesKey("seen_update_notification_ids")
 
     val profile: Flow<ServerProfile> = context.dataStore.data.map { prefs ->
         ServerProfile(
@@ -67,6 +70,11 @@ class ServerPreferences(private val context: Context) {
             username = prefs[usernameKey].orEmpty(),
             userId = prefs[userIdKey] ?: 0,
         )
+    }
+
+    /** Local device alerts when followed/owned works gain chapters. Default on. */
+    val chapterUpdateNotificationsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[chapterUpdateNotifyKey] ?: true
     }
 
     val readerPrefs: Flow<ReaderPrefs> = context.dataStore.data.map { prefs ->
@@ -107,6 +115,48 @@ class ServerPreferences(private val context: Context) {
             prefs.remove(loggedInKey)
             prefs.remove(usernameKey)
             prefs.remove(userIdKey)
+            prefs.remove(chapterUpdateSeededKey)
+            prefs.remove(seenUpdateNotificationIdsKey)
+        }
+    }
+
+    suspend fun setChapterUpdateNotificationsEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[chapterUpdateNotifyKey] = enabled
+            if (!enabled) {
+                prefs.remove(chapterUpdateSeededKey)
+                prefs.remove(seenUpdateNotificationIdsKey)
+            }
+        }
+    }
+
+    suspend fun chapterUpdateNotificationsEnabled(): Boolean =
+        chapterUpdateNotificationsEnabled.first()
+
+    suspend fun chapterUpdateFeedSeeded(): Boolean =
+        context.dataStore.data.first()[chapterUpdateSeededKey] ?: false
+
+    suspend fun markChapterUpdateFeedSeeded() {
+        context.dataStore.edit { prefs -> prefs[chapterUpdateSeededKey] = true }
+    }
+
+    suspend fun seenUpdateNotificationIds(): Set<String> {
+        val raw = context.dataStore.data.first()[seenUpdateNotificationIdsKey].orEmpty()
+        if (raw.isBlank()) return emptySet()
+        return runCatching { json.decodeFromString<List<String>>(raw).toSet() }.getOrDefault(emptySet())
+    }
+
+    suspend fun rememberUpdateNotificationIds(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        context.dataStore.edit { prefs ->
+            val merged = (
+                runCatching {
+                    json.decodeFromString<List<String>>(prefs[seenUpdateNotificationIdsKey].orEmpty())
+                }.getOrDefault(emptyList()) + ids
+                )
+                .distinct()
+                .takeLast(250)
+            prefs[seenUpdateNotificationIdsKey] = json.encodeToString(merged)
         }
     }
 

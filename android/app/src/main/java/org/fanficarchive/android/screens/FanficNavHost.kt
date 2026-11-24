@@ -21,7 +21,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import org.fanficarchive.android.FanficApp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -67,19 +69,36 @@ private val mainTabs = listOf(
 )
 
 @Composable
-fun FanficNavHost(repository: ArchiveRepository) {
+fun FanficNavHost(
+    repository: ArchiveRepository,
+    openWorkId: Int? = null,
+    onOpenWorkConsumed: () -> Unit = {},
+) {
     var profile by remember { mutableStateOf<ServerProfile?>(null) }
     val liveProfile by repository.profile.collectAsState(initial = ServerProfile())
     val navController = rememberNavController()
     var serverInfo by remember { mutableStateOf<ServerInfo?>(null) }
+    val context = LocalContext.current
+    val app = context.applicationContext as? FanficApp
 
     LaunchedEffect(Unit) {
         // Persist cookies across process death; re-check /api/me before routing.
         runCatching { repository.restoreSession() }
         profile = repository.profile.first()
+        app?.syncChapterUpdatePolling()
     }
     LaunchedEffect(liveProfile) {
         if (profile != null) profile = liveProfile
+        app?.syncChapterUpdatePolling()
+    }
+    LaunchedEffect(openWorkId, profile) {
+        val workId = openWorkId ?: return@LaunchedEffect
+        val currentProfile = profile ?: return@LaunchedEffect
+        if (!currentProfile.loggedIn) return@LaunchedEffect
+        navController.navigate(Routes.work(workId)) {
+            launchSingleTop = true
+        }
+        onOpenWorkConsumed()
     }
 
     val current = profile ?: return
@@ -144,6 +163,7 @@ fun FanficNavHost(repository: ArchiveRepository) {
                     baseUrl = current.baseUrl,
                     serverInfo = serverInfo,
                     onLoggedIn = {
+                        app?.syncChapterUpdatePolling()
                         navController.navigate(Routes.LIBRARY) {
                             popUpTo(Routes.LOGIN) { inclusive = true }
                         }
@@ -179,12 +199,14 @@ fun FanficNavHost(repository: ArchiveRepository) {
                     onBack = { navController.popBackStack() },
                     onOpenWork = { navController.navigate(Routes.work(it)) },
                     onLoggedOut = {
+                        app?.syncChapterUpdatePolling()
                         navController.navigate(Routes.LOGIN) {
                             popUpTo(0) { inclusive = true }
                         }
                     },
                     onDisconnected = {
                         serverInfo = null
+                        app?.syncChapterUpdatePolling()
                         navController.navigate(Routes.SETUP) {
                             popUpTo(0) { inclusive = true }
                         }

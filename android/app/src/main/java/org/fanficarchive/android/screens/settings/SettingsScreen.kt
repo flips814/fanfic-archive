@@ -1,7 +1,12 @@
 package org.fanficarchive.android.screens.settings
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -30,10 +36,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
+import org.fanficarchive.android.FanficApp
 import org.fanficarchive.android.data.ArchiveRepository
 import org.fanficarchive.android.data.ServerInfo
 import org.fanficarchive.android.data.ServerProfile
@@ -66,10 +75,25 @@ fun SettingsScreen(
     var serverInfo by remember { mutableStateOf<ServerInfo?>(null) }
     val readingProgress by repository.readingProgressForCurrentServer()
         .collectAsState(initial = emptyMap())
+    val chapterAlerts by repository.chapterUpdateNotificationsEnabled
+        .collectAsState(initial = true)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val app = context.applicationContext as? FanficApp
     val siteUrl = serverInfo?.baseUrl?.takeIf { it.isNotBlank() } ?: profile.baseUrl
     val siteName = serverInfo?.siteName?.takeIf { it.isNotBlank() } ?: profile.siteName
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { /* optional */ }
+
+    fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
 
     fun refresh() {
         scope.launch {
@@ -200,6 +224,36 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             .padding(top = 12.dp),
                     ) { ButtonLabel("Open site in browser") }
+                }
+            }
+
+            item {
+                FanficCard {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text("Chapter alerts", style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                "Notify on this device when a story you follow or imported gains a new chapter.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                        Switch(
+                            checked = chapterAlerts,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    repository.setChapterUpdateNotificationsEnabled(enabled)
+                                    app?.syncChapterUpdatePolling()
+                                    if (enabled) ensureNotificationPermission()
+                                }
+                            },
+                        )
+                    }
                 }
             }
 

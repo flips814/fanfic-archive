@@ -54,6 +54,8 @@ data class OfflineWorkSnapshot(
         wordCount = wordCount,
         chapters = chapters.size.coerceAtLeast(chapterList.size),
         fandoms = fandoms,
+        tags = tags,
+        relationships = relationships,
         visibility = visibility,
         coverUrl = localCoverUri ?: coverUrl,
     )

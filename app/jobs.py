@@ -88,6 +88,7 @@ def follow(db: Session, user: User, work: Work) -> None:
 
 
 def schedule_due_updates(db: Session) -> int:
+    """Queue due auto-updates for every work with auto_update on (public and private)."""
     now = utcnow()
     pending_ids = select(ImportJob.work_id).where(
         ImportJob.status.in_(PENDING), ImportJob.work_id.is_not(None)
@@ -106,6 +107,7 @@ def schedule_due_updates(db: Session) -> int:
                 < now - timedelta(minutes=settings.completed_update_interval_minutes),
             )
         )
+    # Visibility is intentionally ignored: private works auto-update the same as public.
     works = db.scalars(
         select(Work)
         .where(Work.auto_update.is_(True), Work.id.not_in(pending_ids), or_(*conditions))
@@ -184,8 +186,18 @@ def run_job(job_id: int) -> None:
         with session_scope() as db:
             work = db.get(Work, work_id) if work_id else None
             work = work or db.scalar(select(Work).where(Work.source_url == meta.url))
-            if work is not None and work.is_private and work.added_by_id != requester_id:
-                raise ImportError_(_PRIVATE_COLLISION)
+            # Block other users from importing/updating someone else's private work.
+            # Allow: the owner, scheduled auto-updates (no requester), and admins
+            # (e.g. Check all). Auto-update applies to public and private alike.
+            if (
+                work is not None
+                and work.is_private
+                and requester_id is not None
+                and work.added_by_id != requester_id
+            ):
+                requester = db.get(User, requester_id)
+                if requester is None or not requester.is_admin:
+                    raise ImportError_(_PRIVATE_COLLISION)
             if work is None:
                 work = Work(
                     added_by_id=requester_id,
@@ -193,6 +205,7 @@ def run_job(job_id: int) -> None:
                     site=meta.site,
                     source_url=meta.url,
                     visibility=intended_visibility,
+                    auto_update=True,
                 )
                 db.add(work)
                 created = True

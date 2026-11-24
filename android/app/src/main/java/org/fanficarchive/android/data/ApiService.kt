@@ -30,6 +30,9 @@ interface ApiService {
     suspend fun listWorks(
         @Query("q") q: String? = null,
         @Query("site") site: String? = null,
+        @Query("category") category: String? = null,
+        @Query("tag") tag: String? = null,
+        @Query("relationship") relationship: String? = null,
         @Query("status") status: String? = null,
         @Query("visibility") visibility: String? = null,
         @Query("mine") mine: String? = null,

@@ -5,12 +5,12 @@
 <div class="page-head">
   <hgroup>
     <h1>Library</h1>
-    <p>{{ total }} work{{ "" if total == 1 else "s" }}{% if filters.q or filters.site or filters.added_by or filters.status or filters.visibility or filters.mine %} matching your filters{% endif %}</p>
+    <p>{{ total }} work{{ "" if total == 1 else "s" }}{% if filters.q or filters.site or filters.category or filters.tag or filters.relationship or filters.added_by or filters.status or filters.visibility or filters.mine %} matching your filters{% endif %}</p>
   </hgroup>
   <a href="/add" role="button">{{ icon("plus") }} Add works</a>
 </div>
 
-{% set active_filters = [filters.site, filters.added_by, filters.status, filters.visibility, filters.mine]|select|list|length %}
+{% set active_filters = [filters.site, filters.category, filters.tag, filters.relationship, filters.added_by, filters.status, filters.visibility, filters.mine]|select|list|length %}
 <search aria-label="Search and filter the library">
 <form method="get" class="filters">
   <div class="field grow">
@@ -25,6 +25,27 @@
     <select id="f-site" name="site">
       <option value="">All sites</option>
       {% for s in sites %}<option value="{{ s }}" {% if s == filters.site %}selected{% endif %}>{{ site_label(s) }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-category">Category</label>
+    <select id="f-category" name="category">
+      <option value="">All categories</option>
+      {% for c in categories %}<option value="{{ c }}" {% if c == filters.category %}selected{% endif %}>{{ c }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-tag">Tag</label>
+    <select id="f-tag" name="tag">
+      <option value="">All tags</option>
+      {% for t in tags %}<option value="{{ t }}" {% if t == filters.tag %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-relationship">Relationship</label>
+    <select id="f-relationship" name="relationship">
+      <option value="">All relationships</option>
+      {% for r in relationships %}<option value="{{ r }}" {% if r == filters.relationship %}selected{% endif %}>{{ r }}</option>{% endfor %}
     </select>
   </div>
   <div class="field">
@@ -57,14 +78,14 @@
   </details>
   <div class="field buttons">
     <button type="submit">Apply</button>
-    {% if filters.q or filters.site or filters.added_by or filters.status or filters.visibility or filters.mine %}<a href="/" role="button" class="secondary outline">Clear</a>{% endif %}
+    {% if filters.q or filters.site or filters.category or filters.tag or filters.relationship or filters.added_by or filters.status or filters.visibility or filters.mine %}<a href="/" role="button" class="secondary outline">Clear</a>{% endif %}
   </div>
 </form>
 </search>
 
 {% if not rows %}
   <article class="empty-state">
-    {% if total == 0 and not (filters.q or filters.site or filters.added_by or filters.status or filters.visibility or filters.mine) %}
+    {% if total == 0 and not (filters.q or filters.site or filters.category or filters.tag or filters.relationship or filters.added_by or filters.status or filters.visibility or filters.mine) %}
       <h2>Your library is empty</h2>
       <p>Paste a link to a story to import it. New chapters will arrive automatically.</p>
       <a href="/add" role="button">{{ icon("plus") }} Import your first work</a>
