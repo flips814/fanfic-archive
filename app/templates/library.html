@@ -156,7 +156,6 @@
       </dl>
       <p class="card-foot">
         Imported by {{ work.added_by.label if work.added_by else "a removed user" }}
-        {% if work.last_error %}<span class="warn">{{ icon("alert") }} Last update check failed</span>{% endif %}
       </p>
       </div>
     </article>

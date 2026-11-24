@@ -204,9 +204,6 @@ fun WorkDetailScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        detail.lastError?.let {
-                            Text("Update error: $it", color = MaterialTheme.colorScheme.error)
-                        }
                     }
                     if (!layout.isCompact && cover != null) {
                         Row(

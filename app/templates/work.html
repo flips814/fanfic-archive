@@ -60,13 +60,6 @@
   </div>
 </header>
 
-{% if work.last_error %}
-  <article class="notice notice-error" role="alert">
-    <strong>{{ icon("alert") }} The last update check failed.</strong>
-    <p>{{ work.last_error }}</p>
-  </article>
-{% endif %}
-
 <section class="stat-grid" aria-label="Details">
   <div><span class="stat-label">Chapters</span><span class="stat-value">{{ work.chapters|length }}</span></div>
   <div><span class="stat-label">Words</span><span class="stat-value">{{ work.word_count|num }}</span></div>

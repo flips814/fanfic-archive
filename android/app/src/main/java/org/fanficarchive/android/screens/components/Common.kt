@@ -360,13 +360,6 @@ fun WorkCard(
                         if (work.isFollowing) FollowingPill()
                     }
                 }
-                if (!work.lastError.isNullOrBlank()) {
-                    Text(
-                        "Update check failed",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
             }
         }
     }
