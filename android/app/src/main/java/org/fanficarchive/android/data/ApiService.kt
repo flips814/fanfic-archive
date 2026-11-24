@@ -37,6 +37,8 @@ interface ApiService {
         @Query("visibility") visibility: String? = null,
         @Query("mine") mine: String? = null,
         @Query("followed") followed: String? = null,
+        @Query("continue_reading") continueReading: String? = null,
+        @Query("finished") finished: String? = null,
         @Query("added_by") addedBy: Int? = null,
         @Query("limit") limit: Int = 100,
         @Query("offset") offset: Int = 0,

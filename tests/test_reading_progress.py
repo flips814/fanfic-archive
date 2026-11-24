@@ -21,7 +21,10 @@ def test_reading_progress_save_get_clear(fake_site, sent):
     assert abs(saved["scroll_fraction"] - 0.4) < 0.001
 
     listing = alice.get("/api/reading-progress").json()["progress"]
-    assert any(p["work_id"] == work_id and p["chapter_number"] == 2 for p in listing)
+    match_progress = next(p for p in listing if p["work_id"] == work_id)
+    assert match_progress["chapter_number"] == 2
+    assert match_progress["work"]["id"] == work_id
+    assert match_progress["work"]["title"] == "Bookmark Me"
 
     detail = alice.get(f"/api/works/{work_id}").json()
     assert detail["resume_chapter"] == 2
@@ -30,6 +33,36 @@ def test_reading_progress_save_get_clear(fake_site, sent):
     works = alice.get("/api/works").json()["works"]
     match = next(w for w in works if w["id"] == work_id)
     assert match["resume_chapter"] == 2
+
+    assert match_progress["caught_up"] is False
+    assert match_progress["last_chapter"] == 3
+
+    continue_only = alice.get("/api/works", params={"continue_reading": "1"}).json()
+    assert continue_only["total"] >= 1
+    assert any(w["id"] == work_id for w in continue_only["works"])
+
+    library = alice.get("/")
+    assert library.status_code == 200
+    body = library.text
+    assert "Continue reading" in body
+    assert "Continue · Ch 2" in body
+
+    # Reach the final chapter → Finished / Caught up.
+    alice.put(
+        f"/api/works/{work_id}/reading-progress",
+        json={"chapter_number": 3, "scroll_fraction": 1},
+    )
+    done = alice.get("/api/reading-progress").json()["progress"]
+    done_row = next(p for p in done if p["work_id"] == work_id)
+    assert done_row["caught_up"] is True
+    assert done_row["catch_up_label"] in ("Caught up", "Finished")
+
+    finished_only = alice.get("/api/works", params={"finished": "1"}).json()
+    assert any(w["id"] == work_id for w in finished_only["works"])
+    assert alice.get("/api/works", params={"continue_reading": "1"}).json()["total"] == 0
+
+    finished_page = alice.get("/")
+    assert "Finished" in finished_page.text or "caught up" in finished_page.text.lower()
 
     assert alice.delete(f"/api/works/{work_id}/reading-progress").json()["ok"] is True
     assert alice.get(f"/api/works/{work_id}/reading-progress").json()["progress"] is None

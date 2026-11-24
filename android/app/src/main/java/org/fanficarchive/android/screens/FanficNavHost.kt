@@ -191,6 +191,9 @@ fun FanficNavHost(
                     siteName = current.siteName,
                     baseUrl = current.baseUrl,
                     onOpenWork = { navController.navigate(Routes.work(it)) },
+                    onContinueReading = { workId, chapter ->
+                        navController.navigate(Routes.reader(workId, chapter))
+                    },
                     onSettings = { navController.navigate(Routes.SETTINGS) },
                     onAddWorks = { navController.navigateMainTab(Routes.IMPORT) },
                 )

@@ -39,6 +39,12 @@ from app.importers import is_supported, site_label
 from app.jobs import enqueue_import, enqueue_update, follow
 from app.logins import LOGIN_SITES, delete_login, save_login, user_logins
 from app.models import Chapter, Comment, Follow, ImportJob, ReadingProgress, User, Work, utcnow
+from app.reading import (
+    catch_up_label,
+    catch_up_message,
+    is_caught_up,
+    last_chapter_map,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("web")
@@ -164,6 +170,8 @@ templates.env.globals.update(
     is_new_chapter=_is_new_chapter,
     has_cover=covers.has_cover,
     cover_url=covers.cover_url_path,
+    catch_up_label=catch_up_label,
+    catch_up_message=catch_up_message,
     comment_max_length=comments.MAX_LENGTH,
     static_version=hashlib.sha256(
         b"".join(p.read_bytes() for p in sorted((BASE_DIR / "static").iterdir()))
@@ -227,6 +235,8 @@ def library(
     status: str = "",
     visibility: str = "",
     mine: str = "",
+    continue_reading: str = "",
+    finished: str = "",
     page: int = 1,
     db: Session = Depends(get_db),
     user: User | None = Depends(current_user_optional),
@@ -240,6 +250,10 @@ def library(
     visibility = visibility.strip().lower()
     if visibility not in (VISIBILITY_PUBLIC, VISIBILITY_PRIVATE):
         visibility = ""
+    only_continue = continue_reading in ("1", "true", "yes", "on")
+    only_finished = finished in ("1", "true", "yes", "on")
+    if only_continue and only_finished:
+        only_finished = False
     chapter_count = (
         select(func.count(Chapter.id)).where(Chapter.work_id == Work.id).correlate(Work).scalar_subquery()
     )
@@ -267,26 +281,70 @@ def library(
         query = query.where(vis_clause)
     if mine:
         query = query.join(Follow, (Follow.work_id == Work.id) & (Follow.user_id == user.id))
+    last_ch = (
+        select(func.max(Chapter.number))
+        .where(Chapter.work_id == Work.id)
+        .correlate(Work)
+        .scalar_subquery()
+    )
+    if only_continue or only_finished:
+        query = query.join(
+            ReadingProgress,
+            (ReadingProgress.work_id == Work.id) & (ReadingProgress.user_id == user.id),
+        )
+        if only_continue:
+            query = query.where(ReadingProgress.chapter_number < last_ch)
+        else:
+            query = query.where(ReadingProgress.chapter_number >= last_ch)
 
     total = db.scalar(select(func.count()).select_from(query.subquery()))
+    order = (
+        ReadingProgress.updated_at.desc()
+        if only_continue or only_finished
+        else func.coalesce(Work.last_new_chapter_at, Work.created_at).desc()
+    )
     rows = db.execute(
-        query.order_by(func.coalesce(Work.last_new_chapter_at, Work.created_at).desc())
-        .offset((max(page, 1) - 1) * PAGE_SIZE)
-        .limit(PAGE_SIZE)
+        query.order_by(order).offset((max(page, 1) - 1) * PAGE_SIZE).limit(PAGE_SIZE)
     ).all()
     followed = set(db.scalars(select(Follow.work_id).where(Follow.user_id == user.id)))
     work_ids = [work.id for work, _ in rows]
     reading_progress = {}
+    caught_up_ids: set[int] = set()
     if work_ids:
-        reading_progress = {
-            p.work_id: p.chapter_number
-            for p in db.scalars(
-                select(ReadingProgress).where(
-                    ReadingProgress.user_id == user.id,
-                    ReadingProgress.work_id.in_(work_ids),
-                )
-            ).all()
+        progress_rows = db.scalars(
+            select(ReadingProgress).where(
+                ReadingProgress.user_id == user.id,
+                ReadingProgress.work_id.in_(work_ids),
+            )
+        ).all()
+        last_by_work = last_chapter_map(db, work_ids)
+        reading_progress = {p.work_id: p.chapter_number for p in progress_rows}
+        caught_up_ids = {
+            p.work_id
+            for p in progress_rows
+            if is_caught_up(p.chapter_number, last_by_work.get(p.work_id))
         }
+    # Featured strips — independent of filters.
+    continue_rows = []
+    finished_rows = []
+    recent_progress = db.scalars(
+        select(ReadingProgress)
+        .where(ReadingProgress.user_id == user.id)
+        .order_by(ReadingProgress.updated_at.desc())
+        .limit(24)
+    ).all()
+    recent_last = last_chapter_map(db, [p.work_id for p in recent_progress])
+    for progress in recent_progress:
+        work = db.get(Work, progress.work_id)
+        if not work or not can_view(user, work):
+            continue
+        last = recent_last.get(work.id)
+        entry = (work, progress.chapter_number, progress.updated_at, catch_up_label(work))
+        if is_caught_up(progress.chapter_number, last):
+            if len(finished_rows) < 5:
+                finished_rows.append(entry)
+        elif len(continue_rows) < 5:
+            continue_rows.append(entry)
     sites = db.scalars(
         select(Work.site).where(visible_works_clause(user)).distinct().order_by(Work.site)
     ).all()
@@ -304,6 +362,9 @@ def library(
         pages=max(1, -(-total // PAGE_SIZE)),
         followed=followed,
         reading_progress=reading_progress,
+        caught_up_ids=caught_up_ids,
+        continue_rows=continue_rows,
+        finished_rows=finished_rows,
         sites=sites,
         categories=categories,
         tags=tags,
@@ -319,6 +380,8 @@ def library(
             "status": status,
             "visibility": visibility,
             "mine": bool(mine),
+            "continue_reading": only_continue,
+            "finished": only_finished,
         },
     )
 

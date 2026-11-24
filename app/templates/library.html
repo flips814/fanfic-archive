@@ -5,12 +5,93 @@
 <div class="page-head">
   <hgroup>
     <h1>Library</h1>
-    <p>{{ total }} work{{ "" if total == 1 else "s" }}{% if filters.q or filters.site or filters.category or filters.tag or filters.relationship or filters.added_by or filters.status or filters.visibility or filters.mine %} matching your filters{% endif %}</p>
+    <p>{{ total }} work{{ "" if total == 1 else "s" }}{% if filters.q or filters.site or filters.category or filters.tag or filters.relationship or filters.added_by or filters.status or filters.visibility or filters.mine or filters.continue_reading or filters.finished %} matching your filters{% endif %}</p>
   </hgroup>
   <a href="/add" role="button">{{ icon("plus") }} Add works</a>
 </div>
 
-{% set active_filters = [filters.site, filters.category, filters.tag, filters.relationship, filters.added_by, filters.status, filters.visibility, filters.mine]|select|list|length %}
+{% if continue_rows %}
+{% set last = continue_rows[0] %}
+<section class="continue-reading" aria-labelledby="continue-reading-heading">
+  <div class="continue-reading-head">
+    <h2 id="continue-reading-heading" class="section-title">Continue reading</h2>
+    {% if continue_rows|length > 1 %}
+    <a href="/?continue_reading=1" class="secondary">All in progress</a>
+    {% endif %}
+  </div>
+  <article class="continue-card">
+    {% if has_cover(last[0].id) %}
+    <a class="continue-cover" href="/works/{{ last[0].id }}/chapters/{{ last[1] }}" tabindex="-1" aria-hidden="true">
+      <img src="{{ cover_url(last[0].id) }}" alt="" loading="lazy" width="96" height="144">
+    </a>
+    {% endif %}
+    <div class="continue-body">
+      <p class="continue-kicker">Pick up where you left off</p>
+      <h3 class="continue-title"><a href="/works/{{ last[0].id }}">{{ last[0].title }}</a></h3>
+      <p class="byline">by {{ last[0].author or "unknown author" }}</p>
+      <div class="continue-actions">
+        <a role="button" href="/works/{{ last[0].id }}/chapters/{{ last[1] }}">{{ icon("book") }} Continue · Ch {{ last[1] }}</a>
+        <a href="/works/{{ last[0].id }}" class="secondary">Work details</a>
+      </div>
+      {% if continue_rows|length > 1 %}
+      <ul class="continue-recent" role="list">
+        {% for work, chapter, _updated, _label in continue_rows[1:] %}
+        <li>
+          <a href="/works/{{ work.id }}/chapters/{{ chapter }}">{{ work.title }} · Ch {{ chapter }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </article>
+</section>
+{% endif %}
+
+{% if finished_rows %}
+{% set done = finished_rows[0] %}
+<section class="finished-reading" aria-labelledby="finished-reading-heading">
+  <div class="continue-reading-head">
+    <h2 id="finished-reading-heading" class="section-title">Finished &amp; caught up</h2>
+    {% if finished_rows|length > 1 %}
+    <a href="/?finished=1" class="secondary">See all</a>
+    {% endif %}
+  </div>
+  <article class="continue-card finished-card">
+    {% if has_cover(done[0].id) %}
+    <a class="continue-cover" href="/works/{{ done[0].id }}" tabindex="-1" aria-hidden="true">
+      <img src="{{ cover_url(done[0].id) }}" alt="" loading="lazy" width="96" height="144">
+    </a>
+    {% endif %}
+    <div class="continue-body">
+      <p class="continue-kicker finished-kicker">{{ done[3] }}</p>
+      <h3 class="continue-title"><a href="/works/{{ done[0].id }}">{{ done[0].title }}</a></h3>
+      <p class="byline">by {{ done[0].author or "unknown author" }}</p>
+      <p class="finished-note">
+        {% if done[3] == "Finished" %}
+          You've read every chapter of this completed work.
+        {% else %}
+          You're caught up through chapter {{ done[1] }}. We'll keep watching for updates.
+        {% endif %}
+      </p>
+      <div class="continue-actions">
+        <a role="button" class="secondary" href="/works/{{ done[0].id }}">Open work</a>
+        <a href="/works/{{ done[0].id }}/chapters/{{ done[1] }}" class="secondary outline">Re-read Ch {{ done[1] }}</a>
+      </div>
+      {% if finished_rows|length > 1 %}
+      <ul class="continue-recent" role="list">
+        {% for work, chapter, _updated, label in finished_rows[1:] %}
+        <li>
+          <a href="/works/{{ work.id }}">{{ work.title }} · {{ label }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </article>
+</section>
+{% endif %}
+
+{% set active_filters = [filters.site, filters.category, filters.tag, filters.relationship, filters.added_by, filters.status, filters.visibility, filters.mine, filters.continue_reading, filters.finished]|select|list|length %}
 <search aria-label="Search and filter the library">
 <form method="get" class="filters filters-library">
   <div class="filters-bar">
@@ -20,7 +101,7 @@
     </div>
     <div class="field buttons">
       <button type="submit">Apply</button>
-      {% if filters.q or filters.site or filters.category or filters.tag or filters.relationship or filters.added_by or filters.status or filters.visibility or filters.mine %}<a href="/" role="button" class="secondary outline">Clear</a>{% endif %}
+      {% if filters.q or filters.site or filters.category or filters.tag or filters.relationship or filters.added_by or filters.status or filters.visibility or filters.mine or filters.continue_reading or filters.finished %}<a href="/" role="button" class="secondary outline">Clear</a>{% endif %}
     </div>
   </div>
   <details class="more-filters" open data-collapse-on-mobile="{{ 'false' if active_filters else 'true' }}">
@@ -80,6 +161,12 @@
       <div class="field check">
         <label><input type="checkbox" name="mine" value="1" {% if filters.mine %}checked{% endif %}> Only works I follow</label>
       </div>
+      <div class="field check">
+        <label><input type="checkbox" name="continue_reading" value="1" {% if filters.continue_reading %}checked{% endif %}> Continue reading</label>
+      </div>
+      <div class="field check">
+        <label><input type="checkbox" name="finished" value="1" {% if filters.finished %}checked{% endif %}> Finished / caught up</label>
+      </div>
     </div>
   </details>
 </form>
@@ -87,7 +174,7 @@
 
 {% if not rows %}
   <article class="empty-state">
-    {% if total == 0 and not (filters.q or filters.site or filters.category or filters.tag or filters.relationship or filters.added_by or filters.status or filters.visibility or filters.mine) %}
+    {% if total == 0 and not (filters.q or filters.site or filters.category or filters.tag or filters.relationship or filters.added_by or filters.status or filters.visibility or filters.mine or filters.continue_reading or filters.finished) %}
       <h2>Your library is empty</h2>
       <p>Paste a link to a story to import it. New chapters will arrive automatically.</p>
       <a href="/add" role="button">{{ icon("plus") }} Import your first work</a>
@@ -113,7 +200,11 @@
         {{ status_pill(work.status) }}
         {% if work.is_private %}<span class="pill pill-private">Private</span>{% endif %}
         {% if work.id in followed %}<span class="pill pill-following">{{ icon("star") }} Following</span>{% endif %}
-        {% if work.id in reading_progress %}<span class="pill">Continue · Ch {{ reading_progress[work.id] }}</span>{% endif %}
+        {% if work.id in caught_up_ids %}
+          <span class="pill pill-finished">{{ catch_up_label(work) }}</span>
+        {% elif work.id in reading_progress %}
+          <span class="pill">Continue · Ch {{ reading_progress[work.id] }}</span>
+        {% endif %}
       </div>
       <h2 class="card-title"><a href="/works/{{ work.id }}">{{ work.title }}</a></h2>
       <p class="byline">by {{ work.author or "unknown author" }}</p>

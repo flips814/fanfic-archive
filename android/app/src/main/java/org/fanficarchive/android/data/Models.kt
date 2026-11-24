@@ -319,11 +319,37 @@ data class StoryNotificationList(
 )
 
 @Serializable
+data class ContinueWorkRef(
+    val id: Int,
+    val title: String,
+    val author: String? = null,
+    val site: String? = null,
+    val status: String? = null,
+    @SerialName("cover_url") val coverUrl: String? = null,
+    val visibility: String = VISIBILITY_PUBLIC,
+)
+
+@Serializable
 data class ReadingProgressDto(
     @SerialName("work_id") val workId: Int,
     @SerialName("chapter_number") val chapterNumber: Int,
     @SerialName("scroll_fraction") val scrollFraction: Double = 0.0,
     @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("caught_up") val caughtUp: Boolean? = null,
+    @SerialName("last_chapter") val lastChapter: Int? = null,
+    @SerialName("catch_up_label") val catchUpLabel: String? = null,
+    val work: ContinueWorkRef? = null,
+)
+
+data class ContinueReadingItem(
+    val workId: Int,
+    val chapterNumber: Int,
+    val title: String,
+    val author: String? = null,
+    val site: String? = null,
+    val coverUrl: String? = null,
+    val caughtUp: Boolean = false,
+    val catchUpLabel: String = "Caught up",
 )
 
 @Serializable

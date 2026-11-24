@@ -71,6 +71,7 @@ import org.fanficarchive.android.screens.components.ButtonLabel
 import org.fanficarchive.android.screens.components.ErrorText
 import org.fanficarchive.android.screens.components.HtmlPane
 import org.fanficarchive.android.screens.components.LoadingBox
+import org.fanficarchive.android.screens.components.QuietButton
 import org.fanficarchive.android.screens.components.ReadingSettingsPanel
 import org.fanficarchive.android.screens.components.SecondaryButton
 import org.fanficarchive.android.screens.components.TranslatePanel
@@ -342,6 +343,32 @@ fun ReaderScreen(
                         onTap = { toggleChrome() },
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    if (ch.nextNumber == null) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            shape = MaterialTheme.shapes.medium,
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    "Caught up",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                )
+                                Text(
+                                    "You've reached the latest chapter. Check back when a new one lands, or open the work for details.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                )
+                                QuietButton(onClick = onBack) { ButtonLabel("Back to work") }
+                            }
+                        }
+                    }
                 }
                 }
             }
@@ -425,13 +452,23 @@ fun ReaderScreen(
                         ) {
                             ButtonLabel("Contents")
                         }
-                        SecondaryButton(
-                            onClick = { ch.nextNumber?.let(onOpenChapter) },
-                            enabled = ch.nextNumber != null,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            ButtonLabel("Next")
-                            Icon(Icons.AutoMirrored.Filled.NavigateNext, contentDescription = null)
+                        if (ch.nextNumber != null) {
+                            SecondaryButton(
+                                onClick = { onOpenChapter(ch.nextNumber) },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                ButtonLabel("Next")
+                                Icon(Icons.AutoMirrored.Filled.NavigateNext, contentDescription = null)
+                            }
+                        } else {
+                            val complete = ch.workChapters > 0 && ch.number >= ch.workChapters
+                            SecondaryButton(
+                                onClick = onBack,
+                                filled = true,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                ButtonLabel(if (complete) "Finished" else "Caught up")
+                            }
                         }
                     }
                 }

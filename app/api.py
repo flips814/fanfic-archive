@@ -33,6 +33,12 @@ from app.db import get_db
 from app.importers import is_supported
 from app.jobs import enqueue_import, enqueue_update, follow
 from app.models import Chapter, Comment, Follow, ImportJob, ReadingProgress, User, Work, utcnow
+from app.reading import (
+    catch_up_label,
+    is_caught_up,
+    last_chapter_map,
+    last_chapter_number,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -96,13 +102,32 @@ def _chapter_summary(c: Chapter, comment_count: int | None = None) -> dict:
     return data
 
 
-def _progress(p: ReadingProgress) -> dict:
-    return {
+def _progress(
+    p: ReadingProgress,
+    work: Work | None = None,
+    last_chapter: int | None = None,
+) -> dict:
+    caught = is_caught_up(p.chapter_number, last_chapter) if last_chapter is not None else None
+    data = {
         "work_id": p.work_id,
         "chapter_number": p.chapter_number,
         "scroll_fraction": float(p.scroll_fraction or 0),
         "updated_at": p.updated_at,
+        "caught_up": caught,
+        "last_chapter": last_chapter,
+        "catch_up_label": catch_up_label(work) if caught else None,
     }
+    if work is not None:
+        data["work"] = {
+            "id": work.id,
+            "title": work.title,
+            "author": work.author,
+            "site": work.site,
+            "status": work.status,
+            "cover_url": covers.cover_url_path(work.id),
+            "visibility": normalize_visibility(work.visibility),
+        }
+    return data
 
 
 def _work(
@@ -280,6 +305,8 @@ def list_works(
     visibility: str = "",
     mine: str = "",
     followed: str = "",
+    continue_reading: str = "",
+    finished: str = "",
     added_by: int | None = None,
     limit: int = 100,
     offset: int = 0,
@@ -294,6 +321,10 @@ def list_works(
     visibility = visibility.strip().lower()
     if visibility not in (VISIBILITY_PUBLIC, VISIBILITY_PRIVATE):
         visibility = ""
+    only_continue = continue_reading in ("1", "true", "yes", "on")
+    only_finished = finished in ("1", "true", "yes", "on")
+    if only_continue and only_finished:
+        only_finished = False
     labels = library_label_index(db, user)
     query = select(Work).where(visible_works_clause(user))
     if q:
@@ -320,13 +351,29 @@ def list_works(
         query = query.where(Work.added_by_id == added_by)
     if followed:
         query = query.join(Follow, (Follow.work_id == Work.id) & (Follow.user_id == user.id))
+    last_ch = (
+        select(func.max(Chapter.number))
+        .where(Chapter.work_id == Work.id)
+        .correlate(Work)
+        .scalar_subquery()
+    )
+    if only_continue or only_finished:
+        query = query.join(
+            ReadingProgress,
+            (ReadingProgress.work_id == Work.id) & (ReadingProgress.user_id == user.id),
+        )
+        if only_continue:
+            query = query.where(ReadingProgress.chapter_number < last_ch)
+        else:
+            query = query.where(ReadingProgress.chapter_number >= last_ch)
 
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-    works = db.scalars(
-        query.order_by(func.coalesce(Work.last_new_chapter_at, Work.created_at).desc())
-        .offset(offset)
-        .limit(limit)
-    ).all()
+    order = (
+        ReadingProgress.updated_at.desc()
+        if only_continue or only_finished
+        else func.coalesce(Work.last_new_chapter_at, Work.created_at).desc()
+    )
+    works = db.scalars(query.order_by(order).offset(offset).limit(limit)).all()
     followed_ids = set(db.scalars(select(Follow.work_id).where(Follow.user_id == user.id)))
     progress_by_work: dict[int, ReadingProgress] = {}
     if works:
@@ -456,22 +503,28 @@ def list_reading_progress(db: Session = Depends(get_db), user: User = Depends(cu
         .where(ReadingProgress.user_id == user.id)
         .order_by(ReadingProgress.updated_at.desc())
     ).all()
-    # Drop bookmarks for works the user can no longer see.
-    visible = []
+    # Drop bookmarks for works the user can no longer see; include work stubs for Continue reading.
+    visible_pairs: list[tuple[ReadingProgress, Work]] = []
     for row in rows:
         work = db.get(Work, row.work_id)
         if work and can_view(user, work):
-            visible.append(_progress(row))
-    return {"progress": visible}
+            visible_pairs.append((row, work))
+    last_by_work = last_chapter_map(db, [work.id for _, work in visible_pairs])
+    return {
+        "progress": [
+            _progress(row, work, last_by_work.get(work.id))
+            for row, work in visible_pairs
+        ]
+    }
 
 
 @router.get("/works/{work_id}/reading-progress")
 def get_reading_progress(work_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _get_work(db, work_id, user)
+    work = _get_work(db, work_id, user)
     row = db.get(ReadingProgress, (user.id, work_id))
     if row is None:
         return {"progress": None}
-    return {"progress": _progress(row)}
+    return {"progress": _progress(row, work, last_chapter_number(db, work_id))}
 
 
 @router.put("/works/{work_id}/reading-progress")
@@ -497,7 +550,7 @@ def put_reading_progress(
     row.updated_at = utcnow()
     db.commit()
     db.refresh(row)
-    return {"progress": _progress(row)}
+    return {"progress": _progress(row, work, last_chapter_number(db, work_id))}
 
 
 @router.delete("/works/{work_id}/reading-progress")

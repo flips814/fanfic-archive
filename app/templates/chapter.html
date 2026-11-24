@@ -92,7 +92,11 @@
       <span class="dir">Next {{ icon("arrow-right") }}</span><span class="ch">{{ next.title }}</span>
     </a>
   {% else %}
-    <span class="chapter-nav-end">You're all caught up.</span>
+    <div class="chapter-nav-end catch-up-banner" role="status">
+      <strong>{{ catch_up_label(work) }}</strong>
+      <span>{{ catch_up_message(work) }}</span>
+      <a href="/works/{{ work.id }}">Back to work</a>
+    </div>
   {% endif %}
 </nav>
 

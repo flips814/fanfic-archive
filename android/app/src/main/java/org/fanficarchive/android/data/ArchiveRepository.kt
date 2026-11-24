@@ -197,6 +197,8 @@ class ArchiveRepository(
         status: String? = null,
         visibility: String? = null,
         followedOnly: Boolean = false,
+        continueReadingOnly: Boolean = false,
+        finishedOnly: Boolean = false,
         addedBy: Int? = null,
         offset: Int = 0,
         limit: Int = 30,
@@ -209,10 +211,74 @@ class ArchiveRepository(
         status = status?.ifBlank { null },
         visibility = visibility?.ifBlank { null },
         followed = if (followedOnly) "1" else null,
+        continueReading = if (continueReadingOnly) "1" else null,
+        finished = if (finishedOnly) "1" else null,
         addedBy = addedBy,
         limit = limit,
         offset = offset,
     )
+
+    private fun progressItem(dto: ReadingProgressDto): ContinueReadingItem? {
+        val work = dto.work ?: return null
+        val caughtUp = dto.caughtUp == true
+        val label = dto.catchUpLabel
+            ?: if (work.status?.lowercase()?.startsWith("complete") == true) "Finished" else "Caught up"
+        return ContinueReadingItem(
+            workId = work.id,
+            chapterNumber = dto.chapterNumber,
+            title = work.title,
+            author = work.author,
+            site = work.site,
+            coverUrl = work.coverUrl,
+            caughtUp = caughtUp,
+            catchUpLabel = label,
+        )
+    }
+
+    /** In-progress bookmarks (not yet on the latest chapter). */
+    suspend fun listContinueReading(limit: Int = 5): List<ContinueReadingItem> =
+        listReadingShelves().first.take(limit)
+
+    /** Works the user has finished or caught up on. */
+    suspend fun listFinishedReading(limit: Int = 5): List<ContinueReadingItem> =
+        listReadingShelves().second.take(limit)
+
+    private suspend fun listReadingShelves(): Pair<List<ContinueReadingItem>, List<ContinueReadingItem>> {
+        val remote = runCatching { api().listReadingProgress().progress }.getOrDefault(emptyList())
+        if (remote.isNotEmpty()) {
+            val continueItems = mutableListOf<ContinueReadingItem>()
+            val finishedItems = mutableListOf<ContinueReadingItem>()
+            remote.mapNotNull(::progressItem).forEach { item ->
+                if (item.caughtUp) finishedItems.add(item) else continueItems.add(item)
+            }
+            return continueItems to finishedItems
+        }
+
+        // Offline / older server: treat local progress as continue-only (no last-chapter data).
+        val profile = prefs.profile.first()
+        if (profile.baseUrl.isBlank() || profile.userId <= 0) {
+            return emptyList<ContinueReadingItem>() to emptyList()
+        }
+        val local = prefs.readingProgressForUser(profile.baseUrl, profile.userId).first()
+            .entries
+            .sortedByDescending { it.value.updatedAt }
+        if (local.isEmpty()) return emptyList<ContinueReadingItem>() to emptyList()
+        val worksById = runCatching { listWorks(limit = 100).works.associateBy { it.id } }
+            .getOrDefault(emptyMap())
+        val continueItems = local.map { (workId, progress) ->
+            val work = worksById[workId] ?: listOfflineWorks().find { it.id == workId }
+            ContinueReadingItem(
+                workId = workId,
+                chapterNumber = progress.chapterNumber,
+                title = work?.title ?: "Work #$workId",
+                author = work?.author,
+                site = work?.site,
+                coverUrl = work?.coverUrl,
+                caughtUp = false,
+            )
+        }
+        return continueItems to emptyList()
+    }
 
     private suspend fun currentBaseUrl(): String {
         val base = prefs.profile.first().baseUrl
